@@ -56,6 +56,8 @@ void ToolForm::updateCameraMode()
     ui->homeBtn->setVisible(!camera);
     ui->returnBtn->setVisible(!camera);
     ui->clipboardBtn->setVisible(!camera);
+    // ScrcpyGUI derivative change: long stitching is available for screen mirroring only.
+    ui->longScreenshotBtn->setVisible(!camera);
     ui->cameraTorchBtn->setVisible(camera);
     ui->cameraZoomOutBtn->setVisible(camera);
     ui->cameraZoomInBtn->setVisible(camera);
@@ -78,6 +80,7 @@ void ToolForm::initStyle()
     IconHelper::Instance()->SetIcon(ui->expandSettingsBtn, QChar(0xf013), 15);
     IconHelper::Instance()->SetIcon(ui->rotateBtn, QChar(0xf021), 15);
     IconHelper::Instance()->SetIcon(ui->screenShotBtn, QChar(0xf0c4), 15);
+    IconHelper::Instance()->SetIcon(ui->longScreenshotBtn, QChar(0xf03e), 15);
     IconHelper::Instance()->SetIcon(ui->touchBtn, QChar(0xf111), 15);
     IconHelper::Instance()->SetIcon(ui->groupControlBtn, QChar(0xf0c0), 15);
     IconHelper::Instance()->SetIcon(ui->clipboardBtn, QChar(0xf0c5), 15);
@@ -200,6 +203,18 @@ void ToolForm::on_screenShotBtn_clicked()
         return;
     }
     device->screenshot();
+}
+
+void ToolForm::on_longScreenshotBtn_clicked()
+{
+    auto device = qsc::IDeviceManage::getInstance().getDevice(m_serial);
+    if (!device) {
+        return;
+    }
+    VideoForm *videoForm = dynamic_cast<VideoForm *>(parent());
+    if (videoForm) {
+        videoForm->startLongScreenshot();
+    }
 }
 
 void ToolForm::on_volumeUpBtn_clicked()

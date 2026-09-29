@@ -4,6 +4,8 @@
 #include <QPointer>
 #include <QTimer>
 #include <QWidget>
+#include <QEvent>
+#include <QImage>
 
 #include "../QtScrcpyCore/include/QtScrcpyCore.h"
 
@@ -17,6 +19,7 @@ class FileHandler;
 class QYUVOpenGLWidget;
 class QLabel;
 class MetalVideoWidget;
+class LongScreenshotController;
 class VideoForm : public QWidget, public qsc::DeviceObserver
 {
     Q_OBJECT
@@ -35,6 +38,14 @@ public:
     void showFPS(bool show);
     void switchFullScreen();
     bool isHost();
+
+    // ScrcpyGUI derivative change: long screenshots use the current rendered frame
+    // and QtScrcpy's existing touch-injection path.
+    void startLongScreenshot();
+    bool isLongScreenshotReady() const;
+    QImage grabVideoFrame();
+    bool injectLongScreenshotTouch(QEvent::Type type, qreal xRatio, qreal yRatio,
+                                   Qt::MouseButton button, Qt::MouseButtons buttons);
 
 private:
     void onFrame(int width, int height, uint8_t* dataY, uint8_t* dataU, uint8_t* dataV,
@@ -89,6 +100,7 @@ private:
     QPointer<MetalVideoWidget> m_metalWidget;
 
     QPointer<QLabel> m_fpsLabel;
+    QPointer<LongScreenshotController> m_longScreenshotController;
 
     //inside member
     QSize m_frameSize;

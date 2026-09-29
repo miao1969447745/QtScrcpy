@@ -1,3 +1,13 @@
+# QtScrcpy — ScrcpyGUI long-screenshot derivative
+
+> **Derivative notice (2026):** This branch is based on Barry Ran's QtScrcpy
+> `dev` branch and adds computer-side scrolling screenshot capture. Modified
+> source files carry ScrcpyGUI derivative notices. The original project and
+> copyright notices are retained under Apache License 2.0.
+>
+> For the Chinese usage guide for the added feature, see
+> [README_SCRCPYGUI_zh.md](README_SCRCPYGUI_zh.md).
+
 # QtScrcpy 
 
 [![Financial Contributors to Open Collective](https://opencollective.com/QtScrcpy/all/badge.svg?label=financial+contributors)](https://opencollective.com/QtScrcpy)

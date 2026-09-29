@@ -1,3 +1,11 @@
+# QtScrcpy — ScrcpyGUI 长截图派生版
+
+> **二次开发说明（2026）：** 本分支基于 Barry Ran 的 QtScrcpy `dev` 分支，
+> 新增电脑端滚动长截图。修改过的源码文件包含 ScrcpyGUI 派生项目标记，
+> 原项目署名和版权声明按 Apache License 2.0 完整保留。
+>
+> 新增长截图功能的使用说明见 [README_SCRCPYGUI_zh.md](README_SCRCPYGUI_zh.md)。
+
 # QtScrcpy
 
 ![Windows](https://github.com/barry-ran/QtScrcpy/workflows/Windows/badge.svg)

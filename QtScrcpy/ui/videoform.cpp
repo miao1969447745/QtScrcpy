@@ -20,6 +20,7 @@
 
 #include "config.h"
 #include "iconhelper.h"
+#include "longscreenshot.h"
 #include "qyuvopenglwidget.h"
 #include "toolform.h"
 #include "mousetap/mousetap.h"
@@ -42,6 +43,8 @@ VideoForm::VideoForm(bool framelessWindow, bool skin, bool showToolbar, int deco
         }
     });
     initUI();
+    // ScrcpyGUI derivative change: keep one long-screenshot state machine per device window.
+    m_longScreenshotController = new LongScreenshotController(this);
     installShortcut();
     updateShowSize(size());
     bool vertical = size().height() > size().width();
@@ -620,6 +623,51 @@ bool VideoForm::isHost()
         return false;
     }
     return m_toolForm->isHost();
+}
+
+void VideoForm::startLongScreenshot()
+{
+    if (m_longScreenshotController) {
+        m_longScreenshotController->start();
+    }
+}
+
+bool VideoForm::isLongScreenshotReady() const
+{
+    auto device = qsc::IDeviceManage::getInstance().getDevice(m_serial);
+    return device && !device->isCameraMode() && !device->isCurrentCustomKeymap()
+        && !isMetalMode() && m_videoWidget && !m_frameSize.isEmpty();
+}
+
+QImage VideoForm::grabVideoFrame()
+{
+    if (!m_videoWidget || m_frameSize.isEmpty()) {
+        return QImage();
+    }
+    QImage frame = m_videoWidget->grabFramebuffer();
+    if (frame.isNull()) {
+        return frame;
+    }
+    if (frame.size() != m_frameSize) {
+        frame = frame.scaled(m_frameSize, Qt::IgnoreAspectRatio, Qt::SmoothTransformation);
+    }
+    return frame;
+}
+
+bool VideoForm::injectLongScreenshotTouch(QEvent::Type type, qreal xRatio, qreal yRatio,
+                                          Qt::MouseButton button, Qt::MouseButtons buttons)
+{
+    auto device = qsc::IDeviceManage::getInstance().getDevice(m_serial);
+    QWidget *vw = videoWidget();
+    if (!device || !vw || m_frameSize.isEmpty() || device->isCurrentCustomKeymap()) {
+        return false;
+    }
+    const QPointF localPos(qBound<qreal>(0.0, xRatio, 1.0) * vw->width(),
+                           qBound<qreal>(0.0, yRatio, 1.0) * vw->height());
+    const QPointF globalPos(vw->mapToGlobal(localPos.toPoint()));
+    QMouseEvent event(type, localPos, localPos, globalPos, button, buttons, Qt::NoModifier);
+    device->mouseEvent(&event, m_frameSize, vw->size());
+    return true;
 }
 
 void VideoForm::updateFPS(quint32 fps)

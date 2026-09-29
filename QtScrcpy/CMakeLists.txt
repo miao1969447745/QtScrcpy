@@ -176,6 +176,9 @@ set(QC_UI_SOURCES
     ui/toolform.h
     ui/toolform.cpp
     ui/toolform.ui
+    # ScrcpyGUI derivative change: computer-side long screenshot stitching.
+    ui/longscreenshot.h
+    ui/longscreenshot.cpp
     ui/videoform.h
     ui/videoform.cpp
     ui/videoform.ui

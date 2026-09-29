@@ -1,0 +1,20 @@
+QtScrcpy - ScrcpyGUI long-screenshot derivative
+Copyright 2026 ScrcpyGUI contributors
+
+This product is derived from QtScrcpy:
+  https://github.com/barry-ran/QtScrcpy
+  Copyright (C) 2025 Rankun and QtScrcpy contributors
+  Licensed under the Apache License, Version 2.0.
+
+QtScrcpy is based on scrcpy:
+  https://github.com/Genymobile/scrcpy
+  Licensed under the Apache License, Version 2.0.
+
+The computer-side long-screenshot stitching implementation is independently
+written. Its design was informed by public ideas from these MIT-licensed
+projects; no binaries from them are redistributed:
+  https://github.com/xutianyi1999/scrollshot
+  https://github.com/jaflo/screenStitch
+
+Files added or modified for the long-screenshot feature carry a ScrcpyGUI
+derivative notice or are listed in the project history.
