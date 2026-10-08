@@ -4,6 +4,50 @@
 <context>
     <name>Dialog</name>
     <message>
+        <source>Disabling wireless debugging...</source>
+        <translation>ワイヤレスデバッグを無効にしています...</translation>
+    </message>
+    <message>
+        <source>Checking wireless debugging...</source>
+        <translation>ワイヤレスデバッグを確認しています...</translation>
+    </message>
+    <message>
+        <source>Disable wireless debugging</source>
+        <translation>ワイヤレスデバッグを無効化</translation>
+    </message>
+    <message>
+        <source>Check wireless debugging</source>
+        <translation>ワイヤレスデバッグを確認</translation>
+    </message>
+    <message>
+        <source>Enable wireless debugging</source>
+        <translation>ワイヤレスデバッグを有効化</translation>
+    </message>
+    <message>
+        <source>Switch back to USB debugging. This disconnects Wi-Fi ADB and wireless mirroring.</source>
+        <translation>USB デバッグに戻します。Wi-Fi ADB 接続とワイヤレスミラーリングが切断されます。</translation>
+    </message>
+    <message>
+        <source>Enable network debugging on port 5555 for Wi-Fi connections. Not needed for USB mirroring.</source>
+        <translation>Wi-Fi 接続用にポート 5555 のネットワークデバッグを有効にします。USB ミラーリングでは不要です。</translation>
+    </message>
+    <message>
+        <source>Wireless debugging enabled.</source>
+        <translation>ワイヤレスデバッグが有効になりました。</translation>
+    </message>
+    <message>
+        <source>Wireless debugging disabled. USB debugging remains available.</source>
+        <translation>ワイヤレスデバッグが無効になりました。USB デバッグは引き続き利用できます。</translation>
+    </message>
+    <message>
+        <source>Could not confirm wireless debugging state. Check the connection and refresh.</source>
+        <translation>ワイヤレスデバッグの状態を確認できません。接続を確認して更新してください。</translation>
+    </message>
+    <message>
+        <source>Enabling wireless debugging...</source>
+        <translation>ワイヤレスデバッグを有効にしています...</translation>
+    </message>
+    <message>
         <source>show</source>
         <translation>表示</translation>
     </message>
@@ -605,8 +649,12 @@
         <translation>ビットレート:</translation>
     </message>
     <message>
-        <source>start adbd</source>
-        <translation>adbd を開始</translation>
+        <source>enable wireless debugging</source>
+        <translation>ワイヤレスデバッグを有効化</translation>
+    </message>
+    <message>
+        <source>Enable network debugging on port 5555 for Wi-Fi connections. Not needed for USB mirroring.</source>
+        <translation>Wi-Fi 接続用にポート 5555 のネットワークデバッグを有効にします。USB ミラーリングでは不要です。</translation>
     </message>
     <message>
         <source>refresh devices</source>

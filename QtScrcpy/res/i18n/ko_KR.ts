@@ -4,6 +4,50 @@
 <context>
     <name>Dialog</name>
     <message>
+        <source>Disabling wireless debugging...</source>
+        <translation>무선 디버깅을 비활성화하는 중...</translation>
+    </message>
+    <message>
+        <source>Checking wireless debugging...</source>
+        <translation>무선 디버깅을 확인하는 중...</translation>
+    </message>
+    <message>
+        <source>Disable wireless debugging</source>
+        <translation>무선 디버깅 비활성화</translation>
+    </message>
+    <message>
+        <source>Check wireless debugging</source>
+        <translation>무선 디버깅 확인</translation>
+    </message>
+    <message>
+        <source>Enable wireless debugging</source>
+        <translation>무선 디버깅 활성화</translation>
+    </message>
+    <message>
+        <source>Switch back to USB debugging. This disconnects Wi-Fi ADB and wireless mirroring.</source>
+        <translation>USB 디버깅으로 전환합니다. Wi-Fi ADB 연결과 무선 미러링이 끊어집니다.</translation>
+    </message>
+    <message>
+        <source>Enable network debugging on port 5555 for Wi-Fi connections. Not needed for USB mirroring.</source>
+        <translation>Wi-Fi 연결을 위해 5555 포트에서 네트워크 디버깅을 활성화합니다. USB 미러링에는 필요하지 않습니다.</translation>
+    </message>
+    <message>
+        <source>Wireless debugging enabled.</source>
+        <translation>무선 디버깅이 활성화되었습니다.</translation>
+    </message>
+    <message>
+        <source>Wireless debugging disabled. USB debugging remains available.</source>
+        <translation>무선 디버깅이 비활성화되었습니다. USB 디버깅은 계속 사용할 수 있습니다.</translation>
+    </message>
+    <message>
+        <source>Could not confirm wireless debugging state. Check the connection and refresh.</source>
+        <translation>무선 디버깅 상태를 확인할 수 없습니다. 연결을 확인한 후 새로고침하세요.</translation>
+    </message>
+    <message>
+        <source>Enabling wireless debugging...</source>
+        <translation>무선 디버깅을 활성화하는 중...</translation>
+    </message>
+    <message>
         <source>show</source>
         <translation>표시</translation>
     </message>
@@ -605,8 +649,12 @@
         <translation>비트 전송률:</translation>
     </message>
     <message>
-        <source>start adbd</source>
-        <translation>adbd 시작</translation>
+        <source>enable wireless debugging</source>
+        <translation>무선 디버깅 활성화</translation>
+    </message>
+    <message>
+        <source>Enable network debugging on port 5555 for Wi-Fi connections. Not needed for USB mirroring.</source>
+        <translation>Wi-Fi 연결을 위해 5555 포트에서 네트워크 디버깅을 활성화합니다. USB 미러링에는 필요하지 않습니다.</translation>
     </message>
     <message>
         <source>refresh devices</source>

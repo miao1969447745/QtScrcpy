@@ -4,6 +4,50 @@
 <context>
     <name>Dialog</name>
     <message>
+        <source>Disabling wireless debugging...</source>
+        <translation>正在关闭无线调试...</translation>
+    </message>
+    <message>
+        <source>Checking wireless debugging...</source>
+        <translation>正在检查无线调试...</translation>
+    </message>
+    <message>
+        <source>Disable wireless debugging</source>
+        <translation>关闭无线调试</translation>
+    </message>
+    <message>
+        <source>Check wireless debugging</source>
+        <translation>检查无线调试</translation>
+    </message>
+    <message>
+        <source>Enable wireless debugging</source>
+        <translation>开启无线调试</translation>
+    </message>
+    <message>
+        <source>Switch back to USB debugging. This disconnects Wi-Fi ADB and wireless mirroring.</source>
+        <translation>切回 USB 调试。此操作会断开 Wi-Fi 调试连接和无线投屏。</translation>
+    </message>
+    <message>
+        <source>Enable network debugging on port 5555 for Wi-Fi connections. Not needed for USB mirroring.</source>
+        <translation>开启手机的网络调试（5555 端口），用于 Wi-Fi 连接。USB 投屏不需要开启。</translation>
+    </message>
+    <message>
+        <source>Wireless debugging enabled.</source>
+        <translation>无线调试已开启。</translation>
+    </message>
+    <message>
+        <source>Wireless debugging disabled. USB debugging remains available.</source>
+        <translation>无线调试已关闭，USB 调试仍然可用。</translation>
+    </message>
+    <message>
+        <source>Could not confirm wireless debugging state. Check the connection and refresh.</source>
+        <translation>无法确认无线调试状态，请检查连接后刷新。</translation>
+    </message>
+    <message>
+        <source>Enabling wireless debugging...</source>
+        <translation>正在开启无线调试...</translation>
+    </message>
+    <message>
         <source>show</source>
         <translation>显示</translation>
     </message>
@@ -605,8 +649,12 @@
         <translation>比特率：</translation>
     </message>
     <message>
-        <source>start adbd</source>
-        <translation>启动adbd</translation>
+        <source>enable wireless debugging</source>
+        <translation>开启无线调试</translation>
+    </message>
+    <message>
+        <source>Enable network debugging on port 5555 for Wi-Fi connections. Not needed for USB mirroring.</source>
+        <translation>开启手机的网络调试（5555 端口），用于 Wi-Fi 连接。USB 投屏不需要开启。</translation>
     </message>
     <message>
         <source>refresh devices</source>

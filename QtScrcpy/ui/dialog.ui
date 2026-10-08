@@ -1175,7 +1175,10 @@
                </sizepolicy>
               </property>
               <property name="text">
-               <string>start adbd</string>
+               <string>enable wireless debugging</string>
+              </property>
+              <property name="toolTip">
+               <string>Enable network debugging on port 5555 for Wi-Fi connections. Not needed for USB mirroring.</string>
               </property>
               <property name="autoDefault">
                <bool>false</bool>

@@ -23,6 +23,8 @@
 
 ## 构建
 
+原“启动 adbd”现为有状态的“开启无线调试 / 关闭无线调试”按钮，详见 [无线调试开关说明](docs/wireless-debugging.md)。
+
 构建要求与上游 QtScrcpy 一致：Qt 5.12+ 或 Qt 6、CMake，以及对应平台的 C++ 工具链。Windows 推荐使用 Qt Creator 打开根目录的 `CMakeLists.txt`，选择 Release 配置构建。
 
 克隆时需要拉取子模块：

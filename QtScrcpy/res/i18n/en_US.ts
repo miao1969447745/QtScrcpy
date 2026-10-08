@@ -4,6 +4,50 @@
 <context>
     <name>Dialog</name>
     <message>
+        <source>Disabling wireless debugging...</source>
+        <translation>Disabling wireless debugging...</translation>
+    </message>
+    <message>
+        <source>Checking wireless debugging...</source>
+        <translation>Checking wireless debugging...</translation>
+    </message>
+    <message>
+        <source>Disable wireless debugging</source>
+        <translation>Disable wireless debugging</translation>
+    </message>
+    <message>
+        <source>Check wireless debugging</source>
+        <translation>Check wireless debugging</translation>
+    </message>
+    <message>
+        <source>Enable wireless debugging</source>
+        <translation>Enable wireless debugging</translation>
+    </message>
+    <message>
+        <source>Switch back to USB debugging. This disconnects Wi-Fi ADB and wireless mirroring.</source>
+        <translation>Switch back to USB debugging. This disconnects Wi-Fi ADB and wireless mirroring.</translation>
+    </message>
+    <message>
+        <source>Enable network debugging on port 5555 for Wi-Fi connections. Not needed for USB mirroring.</source>
+        <translation>Enable network debugging on port 5555 for Wi-Fi connections. Not needed for USB mirroring.</translation>
+    </message>
+    <message>
+        <source>Wireless debugging enabled.</source>
+        <translation>Wireless debugging enabled.</translation>
+    </message>
+    <message>
+        <source>Wireless debugging disabled. USB debugging remains available.</source>
+        <translation>Wireless debugging disabled. USB debugging remains available.</translation>
+    </message>
+    <message>
+        <source>Could not confirm wireless debugging state. Check the connection and refresh.</source>
+        <translation>Could not confirm wireless debugging state. Check the connection and refresh.</translation>
+    </message>
+    <message>
+        <source>Enabling wireless debugging...</source>
+        <translation>Enabling wireless debugging...</translation>
+    </message>
+    <message>
         <source>show</source>
         <translation>show</translation>
     </message>
@@ -605,8 +649,12 @@
         <translation>bit rate:</translation>
     </message>
     <message>
-        <source>start adbd</source>
-        <translation>start adbd</translation>
+        <source>enable wireless debugging</source>
+        <translation>enable wireless debugging</translation>
+    </message>
+    <message>
+        <source>Enable network debugging on port 5555 for Wi-Fi connections. Not needed for USB mirroring.</source>
+        <translation>Enable network debugging on port 5555 for Wi-Fi connections. Not needed for USB mirroring.</translation>
     </message>
     <message>
         <source>refresh devices</source>

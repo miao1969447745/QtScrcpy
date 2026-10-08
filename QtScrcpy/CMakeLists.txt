@@ -181,6 +181,8 @@ set(QC_UI_SOURCES
     ui/longscreenshot.cpp
     ui/pluginbridge.h
     ui/pluginbridge.cpp
+    ui/wirelessdebugging.h
+    ui/wirelessdebugging.cpp
     ui/videoform.h
     ui/videoform.cpp
     ui/videoform.ui
@@ -195,6 +197,15 @@ set(QC_UI_SOURCES
     render/qyuvopenglwidget.cpp
 )
 source_group(ui FILES ${QC_UI_SOURCES})
+
+if(QSC_BUILD_UI_TESTS)
+    add_executable(WirelessDebugTests tests/wirelessdebugging_test.cpp
+        ui/wirelessdebugging.cpp ui/wirelessdebugging.h)
+    target_include_directories(WirelessDebugTests PRIVATE ui)
+    target_link_libraries(WirelessDebugTests PRIVATE Qt${QT_DESIRED_VERSION}::Core)
+    add_test(NAME WirelessDebugState COMMAND WirelessDebugTests
+        ${CMAKE_CURRENT_SOURCE_DIR}/res/i18n/zh_CN.qm)
+endif()
 
 # group controller
 set(QC_GROUP_CONTROLLER

@@ -29,6 +29,7 @@ class QGroupBox;
 class QPushButton;
 class QSpinBox;
 class PluginBridge;
+class WirelessDebugging;
 class Dialog : public QWidget
 {
     Q_OBJECT
@@ -68,7 +69,7 @@ private slots:
     void on_connectedPhoneList_itemDoubleClicked(QListWidgetItem *item);
     void on_updateNameBtn_clicked();
     void on_useSingleModeCheck_clicked();
-    void on_serialBox_currentIndexChanged(const QString &arg1);
+    void on_serialBox_currentTextChanged(const QString &arg1);
 
     void on_startAudioBtn_clicked();
 
@@ -115,6 +116,7 @@ private:
     QString deviceDisplayName(const QString &serial) const;
     void updateDeviceDisplay(const QString &serial);
     void queryRealDeviceName(const QString &serial);
+    void updateWirelessDebugButton();
 
 protected:
     void closeEvent(QCloseEvent *event);
@@ -157,6 +159,7 @@ private:
     QPointer<PresetConfigDialog> m_presetDialog;
     PluginBridge *m_pluginBridge = nullptr;
     QHash<QString, QString> m_deviceNames;
+    WirelessDebugging *m_wirelessDebugging = nullptr;
 };
 
 #endif // DIALOG_H

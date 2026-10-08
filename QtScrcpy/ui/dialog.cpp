@@ -21,6 +21,8 @@
 #include <QScreen>
 #include <QScrollArea>
 #include <QSet>
+#include <QSignalBlocker>
+#include <memory>
 #include <QStandardPaths>
 #include <QStyledItemDelegate>
 #include <QSpinBox>
@@ -32,6 +34,7 @@
 
 #include "config.h"
 #include "dialog.h"
+#include "wirelessdebugging.h"
 #include "ui_dialog.h"
 #include "videoform.h"
 #include "pluginbridge.h"
@@ -107,6 +110,36 @@ Dialog::Dialog(QWidget *parent) : QWidget(parent), ui(new Ui::Widget)
     initializeKeyMapDirectory();
     initUI();
     m_pluginBridge = new PluginBridge(this);
+    m_wirelessDebugging = new WirelessDebugging(
+        [this](const QString &serial, const QStringList &arguments, WirelessDebugging::Completion completion) {
+            auto *adb = new qsc::AdbProcess(this);
+            auto finished = std::make_shared<bool>(false);
+            connect(adb, &qsc::AdbProcess::adbProcessResult, this,
+                    [adb, finished, completion](qsc::AdbProcess::ADB_EXEC_RESULT result) {
+                if (result == qsc::AdbProcess::AER_SUCCESS_START || *finished) return;
+                *finished = true;
+                completion(result == qsc::AdbProcess::AER_SUCCESS_EXEC, adb->getStdOut());
+                adb->deleteLater();
+            });
+            QTimer::singleShot(5000, adb, [adb, finished, completion]() {
+                if (*finished) return;
+                *finished = true;
+                adb->kill();
+                completion(false, QString());
+                adb->deleteLater();
+            });
+            adb->execute(serial, arguments);
+        }, this);
+    connect(m_wirelessDebugging, &WirelessDebugging::stateChanged, this,
+            [this](const QString &) { updateWirelessDebugButton(); });
+    connect(m_wirelessDebugging, &WirelessDebugging::operationFinished, this,
+            [this](const QString &serial, bool enabled, bool success) {
+        outLog(deviceDisplayName(serial) + QStringLiteral(": ") + (success
+            ? (enabled ? tr("Wireless debugging enabled.") : tr("Wireless debugging disabled. USB debugging remains available."))
+            : tr("Could not confirm wireless debugging state. Check the connection and refresh.")));
+        on_updateDevice_clicked();
+    });
+    updateWirelessDebugButton();
     const QStringList startupArgs = QCoreApplication::arguments();
     const int serialArg = startupArgs.indexOf(QStringLiteral("--serial"));
     if (serialArg >= 0 && serialArg + 1 < startupArgs.size()) {
@@ -188,6 +221,7 @@ Dialog::Dialog(QWidget *parent) : QWidget(parent), ui(new Ui::Widget)
                     }
                 }
                 const QString selectedSerial = ui->serialBox->currentText();
+                const QSignalBlocker serialSignals(ui->serialBox);
                 ui->serialBox->clear();
                 ui->connectedPhoneList->clear();
                 for (auto &item : devices) {
@@ -202,6 +236,7 @@ Dialog::Dialog(QWidget *parent) : QWidget(parent), ui(new Ui::Widget)
                     m_requestedSerial.clear();
                     QTimer::singleShot(0, this, &Dialog::on_startServerBtn_clicked);
                 }
+                on_serialBox_currentTextChanged(ui->serialBox->currentText());
             } else if (args.contains("show") && args.contains("wlan0")) {
                 QString ip = m_adb.getDeviceIPFromStdOut();
                 if (ip.isEmpty()) {
@@ -1216,12 +1251,39 @@ void Dialog::on_startAdbdBtn_clicked()
     if (checkAdbRun()) {
         return;
     }
-    outLog("start devices adbd...", false);
-    // adb tcpip 5555
-    QStringList adbArgs;
-    adbArgs << "tcpip";
-    adbArgs << "5555";
-    m_adb.execute(ui->serialBox->currentText().trimmed(), adbArgs);
+    const QString serial = ui->serialBox->currentText().trimmed();
+    if (serial.isEmpty()) return;
+    const auto state = m_wirelessDebugging->state(serial);
+    if (state.checking || state.changing) return;
+    if (state.mode == WirelessDebugging::Unknown) {
+        m_wirelessDebugging->refresh(serial);
+        return;
+    }
+    m_wirelessDebugging->setEnabled(serial, state.mode != WirelessDebugging::Enabled);
+}
+
+void Dialog::updateWirelessDebugButton()
+{
+    if (!m_wirelessDebugging) return;
+    const QString serial = ui->serialBox->currentText().trimmed();
+    const auto state = m_wirelessDebugging->state(serial);
+    const bool busy = state.checking || state.changing;
+    ui->startAdbdBtn->setEnabled(!serial.isEmpty() && !busy && !m_wirelessDebugging->isChanging());
+    ui->wifiConnectBtn->setEnabled(!m_wirelessDebugging->isChanging());
+    if (state.changing) {
+        ui->startAdbdBtn->setText(state.targetEnabled ? tr("Enabling wireless debugging...") : tr("Disabling wireless debugging..."));
+    } else if (state.checking) {
+        ui->startAdbdBtn->setText(tr("Checking wireless debugging..."));
+    } else if (state.mode == WirelessDebugging::Enabled) {
+        ui->startAdbdBtn->setText(tr("Disable wireless debugging"));
+    } else if (state.mode == WirelessDebugging::Unknown && !serial.isEmpty()) {
+        ui->startAdbdBtn->setText(tr("Check wireless debugging"));
+    } else {
+        ui->startAdbdBtn->setText(tr("Enable wireless debugging"));
+    }
+    ui->startAdbdBtn->setToolTip(state.mode == WirelessDebugging::Enabled
+        ? tr("Switch back to USB debugging. This disconnects Wi-Fi ADB and wireless mirroring.")
+        : tr("Enable network debugging on port 5555 for Wi-Fi connections. Not needed for USB mirroring."));
 }
 
 void Dialog::outLog(const QString &log, bool newLine)
@@ -1499,6 +1561,7 @@ int Dialog::findDeviceFromeSerialBox(bool wifi)
 
 void Dialog::on_wifiConnectBtn_clicked()
 {
+    if (checkAdbRun() || m_wirelessDebugging->isChanging()) return;
     on_stopAllServerBtn_clicked();
     delayMs(200);
 
@@ -1515,7 +1578,7 @@ void Dialog::on_wifiConnectBtn_clicked()
     on_getIPBtn_clicked();
     delayMs(200);
 
-    on_startAdbdBtn_clicked();
+    m_wirelessDebugging->setEnabled(ui->serialBox->currentText().trimmed(), true);
     delayMs(1000);
 
     on_wirelessConnectBtn_clicked();
@@ -1565,9 +1628,13 @@ void Dialog::on_useSingleModeCheck_clicked()
     adjustSize();
 }
 
-void Dialog::on_serialBox_currentIndexChanged(const QString &arg1)
+void Dialog::on_serialBox_currentTextChanged(const QString &arg1)
 {
     ui->userNameEdt->setText(Config::getInstance().getNickName(arg1));
+    if (m_wirelessDebugging) {
+        updateWirelessDebugButton();
+        m_wirelessDebugging->refresh(arg1.trimmed());
+    }
 }
 
 QString Dialog::deviceDisplayName(const QString &serial) const
