@@ -35,6 +35,8 @@ git clone --recurse-submodules <repository-url>
 
 ## 许可证与署名
 
+新增的 scrcpy 手机控制插件联动和真实设备名称，见 [联动使用说明](docs/plugin-bridge.md)。插件优先复用 QtScrcpy 已打开的手机窗口，不启动第二路投屏；手机窗口标题和设备列表优先显示系统中的真实设备名称。
+
 整个派生代码库继续使用上游的 Apache License 2.0。详见 [LICENSE](LICENSE) 和 [NOTICE](NOTICE)。
 
 拼接算法为独立实现，设计思路参考了 MIT 许可的 [scrollshot](https://github.com/xutianyi1999/scrollshot) 和 [screenStitch](https://github.com/jaflo/screenStitch)。

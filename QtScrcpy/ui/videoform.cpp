@@ -26,6 +26,7 @@
 #include "mousetap/mousetap.h"
 #include "ui_videoform.h"
 #include "videoform.h"
+#include <cstring>
 
 #ifdef Q_OS_MACOS
 #include "metalvideowindow.h"
@@ -552,6 +553,9 @@ void VideoForm::updateShowSize(const QSize &newSize)
 
 void VideoForm::onVideoSessionChanged(const QSize &size, bool clientResized)
 {
+    ++m_pluginEpoch;
+    m_pluginY.clear();
+    m_pluginFrameClock.invalidate();
     if (m_flexDisplay) {
         m_frameSize = size;
         m_preventAutoResize = clientResized;
@@ -670,6 +674,69 @@ bool VideoForm::injectLongScreenshotTouch(QEvent::Type type, qreal xRatio, qreal
     return true;
 }
 
+const QString &VideoForm::serial() const
+{
+    return m_serial;
+}
+
+bool VideoForm::injectPluginTouch(const QString &action, int x, int y)
+{
+    if (m_frameSize.isEmpty() || x < 0 || y < 0
+            || x >= m_frameSize.width() || y >= m_frameSize.height()) {
+        return false;
+    }
+
+    int type;
+    if (action == QStringLiteral("down")) {
+        type = 0;
+    } else if (action == QStringLiteral("move")) {
+        type = 2;
+    } else if (action == QStringLiteral("up")) {
+        type = 1;
+    } else {
+        return false;
+    }
+
+    auto device = qsc::IDeviceManage::getInstance().getDevice(m_serial);
+    if (!device || device->isCameraMode() || device->isCurrentCustomKeymap()) return false;
+    device->pluginTouch(type, QPoint(x, y), m_frameSize);
+    return true;
+}
+
+bool VideoForm::injectPluginKey(int keycode)
+{
+    auto device = qsc::IDeviceManage::getInstance().getDevice(m_serial);
+    if (!device || device->isCameraMode() || device->isCurrentCustomKeymap()) {
+        return false;
+    }
+    device->postKeyCode(keycode);
+    return true;
+}
+
+bool VideoForm::injectPluginText(const QString &text, bool clipboardPaste)
+{
+    auto device = qsc::IDeviceManage::getInstance().getDevice(m_serial);
+    if (!device || device->isCameraMode() || device->isCurrentCustomKeymap() || text.isEmpty()) {
+        return false;
+    }
+    if (clipboardPaste) {
+        device->setDeviceClipboardText(text, true);
+    } else {
+        device->pluginText(text);
+    }
+    return true;
+}
+
+bool VideoForm::launchPluginApp(const QString &packageName)
+{
+    auto device = qsc::IDeviceManage::getInstance().getDevice(m_serial);
+    if (!device || device->isCameraMode() || packageName.isEmpty()) {
+        return false;
+    }
+    device->pluginStartApp(packageName);
+    return true;
+}
+
 void VideoForm::updateFPS(quint32 fps)
 {
     if (!m_fpsLabel) {
@@ -686,7 +753,44 @@ void VideoForm::grabCursor(bool grab)
 
 void VideoForm::onFrame(int width, int height, uint8_t *dataY, uint8_t *dataU, uint8_t *dataV, int linesizeY, int linesizeU, int linesizeV)
 {
+    if (width > 0 && height > 0 && width <= 8192 && height <= 8192 && dataY && dataU && dataV) {
+        const QSize size(width, height);
+        if (m_pluginSize != size) ++m_pluginEpoch;
+        m_pluginSize = size;
+        const int cw = (width + 1) / 2, ch = (height + 1) / 2;
+        m_pluginY.resize(width * height);
+        m_pluginU.resize(cw * ch);
+        m_pluginV.resize(cw * ch);
+        for (int y = 0; y < height; ++y) memcpy(m_pluginY.data() + y * width, dataY + y * linesizeY, width);
+        for (int y = 0; y < ch; ++y) {
+            memcpy(m_pluginU.data() + y * cw, dataU + y * linesizeU, cw);
+            memcpy(m_pluginV.data() + y * cw, dataV + y * linesizeV, cw);
+        }
+        ++m_pluginSequence;
+        m_pluginFrameClock.start();
+    }
     updateRender(width, height, dataY, dataU, dataV, linesizeY, linesizeU, linesizeV);
+}
+
+QImage VideoForm::pluginFrame() const
+{
+    // Native decoded YUV planes, independent of desktop capture/window visibility.
+    if (m_pluginY.isEmpty() || m_pluginSize.isEmpty()) return QImage();
+    const int width = m_pluginSize.width(), height = m_pluginSize.height(), cw = (width + 1) / 2;
+    QImage image(width, height, QImage::Format_RGB32);
+    if (image.isNull()) return image;
+    for (int y = 0; y < height; ++y) {
+        QRgb *row = reinterpret_cast<QRgb *>(image.scanLine(y));
+        for (int x = 0; x < width; ++x) {
+            const int luma = qMax(0, static_cast<unsigned char>(m_pluginY[y * width + x]) - 16);
+            const int u = static_cast<unsigned char>(m_pluginU[(y / 2) * cw + x / 2]) - 128;
+            const int v = static_cast<unsigned char>(m_pluginV[(y / 2) * cw + x / 2]) - 128;
+            row[x] = qRgb(qBound(0, (298 * luma + 409 * v + 128) >> 8, 255),
+                          qBound(0, (298 * luma - 100 * u - 208 * v + 128) >> 8, 255),
+                          qBound(0, (298 * luma + 516 * u + 128) >> 8, 255));
+        }
+    }
+    return image;
 }
 
 void VideoForm::onFrameMetal(void *cvPixelBuffer, int width, int height)

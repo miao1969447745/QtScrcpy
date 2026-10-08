@@ -116,7 +116,10 @@ int main(int argc, char *argv[])
 
     // Only one QtScrcpy per user. If one is already running (possibly hidden in
     // the system tray), ask it to show its window and exit.
-    SingleInstance singleInstance(QStringLiteral("QtScrcpy"));
+    const QString instanceKey = a.arguments().contains(QStringLiteral("--new-instance"))
+        ? QStringLiteral("QtScrcpy-%1").arg(QCoreApplication::applicationPid())
+        : QStringLiteral("QtScrcpy");
+    SingleInstance singleInstance(instanceKey);
     if (!singleInstance.isPrimary()) {
         singleInstance.notifyPrimary();
         return 0;
@@ -136,12 +139,8 @@ int main(int argc, char *argv[])
     qDebug() << a.applicationVersion();
     qDebug() << a.applicationName();
 
-    //update version
-    QStringList versionList = QCoreApplication::applicationVersion().split(".");
-    if (versionList.size() >= 3) {
-        QString version = versionList[0] + "." + versionList[1] + "." + versionList[2];
-        a.setApplicationVersion(version);
-    }
+    // Keep the derivative's fourth version component in UI and bridge reports.
+    a.setApplicationVersion(QStringLiteral(QSC_APP_VERSION));
 
     installTranslator();
 #if defined(Q_OS_WIN32) || defined(Q_OS_MACOS)

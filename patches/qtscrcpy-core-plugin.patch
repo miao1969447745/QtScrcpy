@@ -1,0 +1,200 @@
+diff --git a/include/QtScrcpyCore.h b/include/QtScrcpyCore.h
+index 1e67de1..a4028b1 100644
+--- a/include/QtScrcpyCore.h
++++ b/include/QtScrcpyCore.h
+@@ -117,6 +117,11 @@ public:
+     virtual void postPower() = 0;
+     virtual void postVolumeUp() = 0;
+     virtual void postVolumeDown() = 0;
++    virtual void postKeyCode(int keycode) = 0;
++    // Target-only plugin input: deliberately bypasses group-control observers.
++    virtual void pluginTouch(int action, const QPoint &position, const QSize &size) = 0;
++    virtual void pluginText(const QString &text) = 0;
++    virtual void pluginStartApp(const QString &name) = 0;
+     virtual void postCopy() = 0;
+     virtual void postCut() = 0;
+     virtual void setDisplayPower(bool on) = 0;
+@@ -130,6 +135,7 @@ public:
+     virtual void postTextInput(QString &text) = 0;
+     virtual void requestDeviceClipboard() = 0;
+     virtual void setDeviceClipboard(bool pause = true) = 0;
++    virtual void setDeviceClipboardText(const QString &text, bool paste = true) = 0;
+     virtual void clipboardPaste() = 0;
+     virtual void pushFileRequest(const QString &file, const QString &devicePath = "") = 0;
+     virtual void installApkRequest(const QString &apkFile) = 0;
+diff --git a/src/adb/adbprocessimpl.cpp b/src/adb/adbprocessimpl.cpp
+index 52576fa..9354934 100644
+--- a/src/adb/adbprocessimpl.cpp
++++ b/src/adb/adbprocessimpl.cpp
+@@ -135,15 +135,15 @@ QStringList AdbProcessImpl::getDevicesSerialFromStdOut()
+     QStringList serials;
+ #if (QT_VERSION < QT_VERSION_CHECK(6, 0, 0))
+     QRegExp lineExp("\r\n|\n");
+-    QRegExp tExp("\t");
++    QRegExp tExp("\\s+");
+ #else
+     QRegularExpression lineExp("\r\n|\n");
+-    QRegularExpression tExp("\t");
++    QRegularExpression tExp("\\s+");
+ #endif
+     QStringList devicesInfoList = m_standardOutput.split(lineExp);
+     for (QString deviceInfo : devicesInfoList) {
+-        QStringList deviceInfos = deviceInfo.split(tExp);
+-        if (2 == deviceInfos.count() && 0 == deviceInfos[1].compare("device")) {
++        QStringList deviceInfos = deviceInfo.trimmed().split(tExp);
++        if (deviceInfos.count() >= 2 && deviceInfos[1] == "device") {
+             serials << deviceInfos[0];
+         }
+     }
+diff --git a/src/device/controller/controller.cpp b/src/device/controller/controller.cpp
+index 8d0a621..007c7c2 100644
+--- a/src/device/controller/controller.cpp
++++ b/src/device/controller/controller.cpp
+@@ -133,6 +133,14 @@ void Controller::postVolumeDown()
+     postKeyCodeClick(AKEYCODE_VOLUME_DOWN);
+ }
+ 
++void Controller::postKeyCode(int keycode)
++{
++    if (keycode < 0) {
++        return;
++    }
++    postKeyCodeClick(static_cast<AndroidKeycode>(keycode));
++}
++
+ void Controller::copy()
+ {
+     postKeyCodeClick(AKEYCODE_COPY);
+@@ -239,12 +247,17 @@ void Controller::getDeviceClipboard(bool cut)
+ void Controller::setDeviceClipboard(bool pause)
+ {
+     QClipboard *board = QApplication::clipboard();
+-    QString text = board->text();
++    setDeviceClipboardText(board->text(), pause);
++}
++
++void Controller::setDeviceClipboardText(const QString &text, bool paste)
++{
+     ControlMsg *controlMsg = new ControlMsg(ControlMsg::CMT_SET_CLIPBOARD);
+     if (!controlMsg) {
+         return;
+     }
+-    controlMsg->setSetClipboardMsgData(text, pause);
++    QString copy = text;
++    controlMsg->setSetClipboardMsgData(copy, paste);
+     postControlMsg(controlMsg);
+ }
+ 
+@@ -265,6 +278,16 @@ void Controller::postTextInput(QString &text)
+     postControlMsg(controlMsg);
+ }
+ 
++void Controller::pluginTouch(int action, const QPoint &position, const QSize &size)
++{
++    ControlMsg *message = new ControlMsg(ControlMsg::CMT_INJECT_TOUCH);
++    // A separate pointer ID prevents mixing plugin gestures with the GUI mouse.
++    message->setInjectTouchMsgData(0x504c5547ULL, static_cast<AndroidMotioneventAction>(action),
++                                  static_cast<AndroidMotioneventButtons>(0), static_cast<AndroidMotioneventButtons>(0),
++                                  QRect(position, size), action == 1 ? 0.0f : 1.0f);
++    postControlMsg(message);
++}
++
+ void Controller::setDisplayPower(bool on)
+ {
+     ControlMsg *controlMsg = new ControlMsg(ControlMsg::CMT_SET_DISPLAY_POWER);
+diff --git a/src/device/controller/controller.h b/src/device/controller/controller.h
+index f1b36a7..5c2ac29 100644
+--- a/src/device/controller/controller.h
++++ b/src/device/controller/controller.h
+@@ -34,6 +34,8 @@ public:
+     void postPower();
+     void postVolumeUp();
+     void postVolumeDown();
++    void postKeyCode(int keycode);
++    void pluginTouch(int action, const QPoint &position, const QSize &size);
+     void copy();
+     void cut();
+     void expandNotificationPanel();
+@@ -59,6 +61,7 @@ public:
+     void requestDeviceClipboard();
+     void getDeviceClipboard(bool cut = false);
+     void setDeviceClipboard(bool pause = true);
++    void setDeviceClipboardText(const QString &text, bool paste = true);
+     void clipboardPaste();
+     void postTextInput(QString &text);
+ 
+diff --git a/src/device/device.cpp b/src/device/device.cpp
+index 3a897fa..5a86c8c 100644
+--- a/src/device/device.cpp
++++ b/src/device/device.cpp
+@@ -571,6 +571,32 @@ void Device::postVolumeDown()
+     }
+ }
+ 
++void Device::postKeyCode(int keycode)
++{
++    if (isCameraMode() || !m_controller) {
++        return;
++    }
++    m_controller->postKeyCode(keycode);
++}
++
++void Device::pluginTouch(int action, const QPoint &position, const QSize &size)
++{
++    if (m_controller) m_controller->pluginTouch(action, position, size);
++}
++
++void Device::pluginText(const QString &text)
++{
++    if (m_controller) {
++        QString copy = text;
++        m_controller->postTextInput(copy);
++    }
++}
++
++void Device::pluginStartApp(const QString &name)
++{
++    if (m_controller) m_controller->startApp(name);
++}
++
+ void Device::postCopy()
+ {
+     if (isCameraMode()) {
+@@ -749,6 +775,14 @@ void Device::setDeviceClipboard(bool pause)
+     }
+ }
+ 
++void Device::setDeviceClipboardText(const QString &text, bool paste)
++{
++    if (isCameraMode() || !m_controller) {
++        return;
++    }
++    m_controller->setDeviceClipboardText(text, paste);
++}
++
+ void Device::clipboardPaste()
+ {
+     if (isCameraMode()) {
+diff --git a/src/device/device.h b/src/device/device.h
+index afb8189..8ebfc78 100644
+--- a/src/device/device.h
++++ b/src/device/device.h
+@@ -51,6 +51,10 @@ public:
+     void postPower() override;
+     void postVolumeUp() override;
+     void postVolumeDown() override;
++    void postKeyCode(int keycode) override;
++    void pluginTouch(int action, const QPoint &position, const QSize &size) override;
++    void pluginText(const QString &text) override;
++    void pluginStartApp(const QString &name) override;
+     void postCopy() override;
+     void postCut() override;
+     void setDisplayPower(bool on) override;
+@@ -64,6 +68,7 @@ public:
+     void postTextInput(QString &text) override;
+     void requestDeviceClipboard() override;
+     void setDeviceClipboard(bool pause = true) override;
++    void setDeviceClipboardText(const QString &text, bool paste = true) override;
+     void clipboardPaste() override;
+     void pushFileRequest(const QString &file, const QString &devicePath = "") override;
+     void installApkRequest(const QString &apkFile) override;

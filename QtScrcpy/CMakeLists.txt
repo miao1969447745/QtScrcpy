@@ -179,6 +179,8 @@ set(QC_UI_SOURCES
     # ScrcpyGUI derivative change: computer-side long screenshot stitching.
     ui/longscreenshot.h
     ui/longscreenshot.cpp
+    ui/pluginbridge.h
+    ui/pluginbridge.cpp
     ui/videoform.h
     ui/videoform.cpp
     ui/videoform.ui
@@ -252,11 +254,14 @@ set(QC_MAIN_SOURCES
 # plantform file
 if(CMAKE_SYSTEM_NAME STREQUAL "Windows")
     # Define VERSION macros for .rc file
+    if(NOT PROJECT_VERSION_TWEAK)
+        set(PROJECT_VERSION_TWEAK 0)
+    endif()
     add_compile_definitions(
         VERSION_MAJOR=${PROJECT_VERSION_MAJOR}
         VERSION_MINOR=${PROJECT_VERSION_MINOR}
         VERSION_PATCH=${PROJECT_VERSION_PATCH}
-        VERSION_RC_STR="${VERSION_MAJOR}.${VERSION_MINOR}.${VERSION_PATCH}"
+        VERSION_TWEAK=${PROJECT_VERSION_TWEAK}
     )
     set(QC_PLANTFORM_SOURCES
         "${CMAKE_CURRENT_SOURCE_DIR}/res/${PROJECT_NAME}.rc"
@@ -293,6 +298,10 @@ endif()
 
 
 add_executable(${PROJECT_NAME} ${QC_RUNTIME_TYPE} ${QC_PROJECT_SOURCES})
+target_compile_definitions(${PROJECT_NAME} PRIVATE QSC_APP_VERSION="${PROJECT_VERSION}")
+if(MINGW)
+    target_link_libraries(${PROJECT_NAME} PRIVATE dwmapi)
+endif()
 
 # Log compile definitions
 if(ENABLE_DETAILED_LOGS)

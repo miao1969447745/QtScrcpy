@@ -6,6 +6,8 @@
 #include <QWidget>
 #include <QEvent>
 #include <QImage>
+#include <QElapsedTimer>
+#include <QRandomGenerator>
 
 #include "../QtScrcpyCore/include/QtScrcpyCore.h"
 
@@ -46,6 +48,15 @@ public:
     QImage grabVideoFrame();
     bool injectLongScreenshotTouch(QEvent::Type type, qreal xRatio, qreal yRatio,
                                    Qt::MouseButton button, Qt::MouseButtons buttons);
+    const QString &serial() const;
+    bool injectPluginTouch(const QString &action, int x, int y);
+    bool injectPluginKey(int keycode);
+    bool injectPluginText(const QString &text, bool clipboardPaste);
+    bool launchPluginApp(const QString &packageName);
+    QImage pluginFrame() const;
+    quint64 pluginFrameSequence() const { return m_pluginSequence; }
+    quint64 pluginCaptureEpoch() const { return m_pluginEpoch; }
+    qint64 pluginFrameAge() const { return m_pluginFrameClock.isValid() ? m_pluginFrameClock.elapsed() : -1; }
 
 private:
     void onFrame(int width, int height, uint8_t* dataY, uint8_t* dataU, uint8_t* dataV,
@@ -104,6 +115,11 @@ private:
 
     //inside member
     QSize m_frameSize;
+    QByteArray m_pluginY, m_pluginU, m_pluginV;
+    QSize m_pluginSize;
+    QElapsedTimer m_pluginFrameClock;
+    quint64 m_pluginSequence = 0;
+    quint64 m_pluginEpoch = QRandomGenerator::global()->bounded(1U, 1000000000U);
     QSize m_normalSize;
     QPoint m_dragPosition;
     float m_widthHeightRatio = 0.5f;

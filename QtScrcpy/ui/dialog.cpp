@@ -34,6 +34,7 @@
 #include "dialog.h"
 #include "ui_dialog.h"
 #include "videoform.h"
+#include "pluginbridge.h"
 #include "../groupcontroller/groupcontroller.h"
 
 #ifdef Q_OS_WIN32
@@ -105,6 +106,12 @@ Dialog::Dialog(QWidget *parent) : QWidget(parent), ui(new Ui::Widget)
     ui->setupUi(this);
     initializeKeyMapDirectory();
     initUI();
+    m_pluginBridge = new PluginBridge(this);
+    const QStringList startupArgs = QCoreApplication::arguments();
+    const int serialArg = startupArgs.indexOf(QStringLiteral("--serial"));
+    if (serialArg >= 0 && serialArg + 1 < startupArgs.size()) {
+        m_requestedSerial = startupArgs.at(serialArg + 1).trimmed();
+    }
 
     updateBootConfig(true);
 
@@ -154,11 +161,46 @@ Dialog::Dialog(QWidget *parent) : QWidget(parent), ui(new Ui::Widget)
             //log = m_adb.getStdOut();
             if (args.contains("devices")) {
                 QStringList devices = m_adb.getDevicesSerialFromStdOut();
+                const QString output = m_adb.getStdOut();
+                QHash<QString, QString> detectedNames;
+                const QRegularExpression linePattern(
+                    QStringLiteral("^([^\\s]+)\\s+device(?:\\s+.*?\\bmodel:([^\\s]+))?.*$"),
+                    QRegularExpression::MultilineOption);
+                QRegularExpressionMatchIterator matches = linePattern.globalMatch(output);
+                while (matches.hasNext()) {
+                    const QRegularExpressionMatch match = matches.next();
+                    QString model = match.captured(2).trimmed();
+                    model.replace('_', ' ');
+                    if (!model.isEmpty()) {
+                        detectedNames.insert(match.captured(1), model);
+                    }
+                }
+                for (auto it = m_deviceNames.begin(); it != m_deviceNames.end();) {
+                    if (!devices.contains(it.key())) {
+                        it = m_deviceNames.erase(it);
+                    } else {
+                        ++it;
+                    }
+                }
+                for (auto it = detectedNames.cbegin(); it != detectedNames.cend(); ++it) {
+                    if (!m_deviceNames.contains(it.key()) || m_deviceNames.value(it.key()).isEmpty()) {
+                        m_deviceNames.insert(it.key(), it.value());
+                    }
+                }
+                const QString selectedSerial = ui->serialBox->currentText();
                 ui->serialBox->clear();
                 ui->connectedPhoneList->clear();
                 for (auto &item : devices) {
                     ui->serialBox->addItem(item);
-                    ui->connectedPhoneList->addItem(Config::getInstance().getNickName(item) + "-" + item);
+                    ui->connectedPhoneList->addItem(deviceDisplayName(item) + " - " + item);
+                    queryRealDeviceName(item);
+                }
+                const int selectedIndex = ui->serialBox->findText(selectedSerial);
+                if (selectedIndex >= 0) ui->serialBox->setCurrentIndex(selectedIndex);
+                if (!m_requestedSerial.isEmpty() && devices.contains(m_requestedSerial)) {
+                    ui->serialBox->setCurrentIndex(ui->serialBox->findText(m_requestedSerial));
+                    m_requestedSerial.clear();
+                    QTimer::singleShot(0, this, &Dialog::on_startServerBtn_clicked);
                 }
             } else if (args.contains("show") && args.contains("wlan0")) {
                 QString ip = m_adb.getDeviceIPFromStdOut();
@@ -794,7 +836,7 @@ void Dialog::on_updateDevice_clicked()
         return;
     }
     outLog("update devices...", false);
-    m_adb.execute("", QStringList() << "devices");
+    m_adb.execute("", QStringList() << "devices" << "-l");
 }
 
 void Dialog::updateVideoSourceUi()
@@ -1255,9 +1297,11 @@ void Dialog::getIPbyIp()
 
 void Dialog::onDeviceConnected(bool success, const QString &serial, const QString &deviceName, const QSize &size)
 {
-    Q_UNUSED(deviceName);
     if (!success) {
         return;
+    }
+    if (!deviceName.trimmed().isEmpty() && !m_deviceNames.contains(serial)) {
+        m_deviceNames.insert(serial, deviceName.trimmed());
     }
     auto videoForm = new VideoForm(ui->framelessCheck->isChecked(), Config::getInstance().getSkin(), ui->showToolbar->isChecked(), ui->decodeModeBox->currentIndex());
     videoForm->setSerial(serial);
@@ -1276,12 +1320,12 @@ void Dialog::onDeviceConnected(bool success, const QString &serial, const QStrin
     // must be show before updateShowSize
     videoForm->show();
 #endif
-    QString name = Config::getInstance().getNickName(serial);
-    if (name.isEmpty()) {
-        name = Config::getInstance().getTitle();
-    }
-    videoForm->setWindowTitle(name + "-" + serial);
+    const QString name = deviceDisplayName(serial);
+    videoForm->setWindowTitle(name + " - " + serial);
     videoForm->updateShowSize(size);
+    if (m_pluginBridge) {
+        m_pluginBridge->registerDevice(serial, name, videoForm);
+    }
 
     bool deviceVer = size.height() > size.width();
     QRect rc = Config::getInstance().getRect(serial);
@@ -1303,6 +1347,9 @@ void Dialog::onDeviceConnected(bool success, const QString &serial, const QStrin
 
 void Dialog::onDeviceDisconnected(QString serial)
 {
+    if (m_pluginBridge) {
+        m_pluginBridge->unregisterDevice(serial);
+    }
     GroupController::instance().removeDevice(serial);
     auto device = qsc::IDeviceManage::getInstance().getDevice(serial);
     if (!device) {
@@ -1497,13 +1544,9 @@ void Dialog::on_connectedPhoneList_itemDoubleClicked(QListWidgetItem *item)
 void Dialog::on_updateNameBtn_clicked()
 {
     if (ui->serialBox->count() != 0) {
-        if (ui->userNameEdt->text().isEmpty()) {
-            Config::getInstance().setNickName(ui->serialBox->currentText(), "Phone");
-        } else {
-            Config::getInstance().setNickName(ui->serialBox->currentText(), ui->userNameEdt->text());
-        }
-
-        on_updateDevice_clicked();
+        const QString serial = ui->serialBox->currentText();
+        Config::getInstance().setNickName(serial, ui->userNameEdt->text().trimmed());
+        updateDeviceDisplay(serial);
 
         qDebug() << "Update OK!";
     } else {
@@ -1525,6 +1568,56 @@ void Dialog::on_useSingleModeCheck_clicked()
 void Dialog::on_serialBox_currentIndexChanged(const QString &arg1)
 {
     ui->userNameEdt->setText(Config::getInstance().getNickName(arg1));
+}
+
+QString Dialog::deviceDisplayName(const QString &serial) const
+{
+    QString realName = m_deviceNames.value(serial).trimmed();
+    if (realName.isEmpty()) {
+        realName = serial;
+    }
+    const QString alias = Config::getInstance().getNickName(serial).trimmed();
+    if (!alias.isEmpty() && alias.compare(QStringLiteral("Phone"), Qt::CaseInsensitive) != 0
+            && alias.compare(realName, Qt::CaseInsensitive) != 0) {
+        return QStringLiteral("%1 [%2]").arg(realName, alias);
+    }
+    return realName;
+}
+
+void Dialog::updateDeviceDisplay(const QString &serial)
+{
+    const int row = ui->serialBox->findText(serial);
+    const QString name = deviceDisplayName(serial);
+    if (row >= 0 && row < ui->connectedPhoneList->count()) {
+        ui->connectedPhoneList->item(row)->setText(name + QStringLiteral(" - ") + serial);
+    }
+    auto device = qsc::IDeviceManage::getInstance().getDevice(serial);
+    if (device && device->getUserData()) {
+        auto *form = static_cast<VideoForm *>(device->getUserData());
+        form->setWindowTitle(name + QStringLiteral(" - ") + serial);
+    }
+    if (m_pluginBridge) {
+        m_pluginBridge->updateDeviceName(serial, name);
+    }
+}
+
+void Dialog::queryRealDeviceName(const QString &serial)
+{
+    auto *adb = new qsc::AdbProcess(this);
+    connect(adb, &qsc::AdbProcess::adbProcessResult, this,
+            [this, adb, serial](qsc::AdbProcess::ADB_EXEC_RESULT result) {
+        if (result == qsc::AdbProcess::AER_SUCCESS_EXEC) {
+            const QString name = adb->getStdOut().trimmed();
+            if (!name.isEmpty() && name.compare(QStringLiteral("null"), Qt::CaseInsensitive) != 0) {
+                m_deviceNames.insert(serial, name);
+                updateDeviceDisplay(serial);
+            }
+        }
+        if (result != qsc::AdbProcess::AER_SUCCESS_START) {
+            adb->deleteLater();
+        }
+    });
+    adb->execute(serial, QStringList() << "shell" << "settings" << "get" << "global" << "device_name");
 }
 
 quint32 Dialog::getBitRate()

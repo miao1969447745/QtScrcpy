@@ -8,6 +8,7 @@
 #include <QSystemTrayIcon>
 #include <QListWidget>
 #include <QTimer>
+#include <QHash>
 
 
 #include "adbprocess.h"
@@ -27,6 +28,7 @@ class QCheckBox;
 class QGroupBox;
 class QPushButton;
 class QSpinBox;
+class PluginBridge;
 class Dialog : public QWidget
 {
     Q_OBJECT
@@ -110,6 +112,9 @@ private:
 
     void showPortEditMenu(const QPoint &pos);
     void syncPresetLevelToUi();
+    QString deviceDisplayName(const QString &serial) const;
+    void updateDeviceDisplay(const QString &serial);
+    void queryRealDeviceName(const QString &serial);
 
 protected:
     void closeEvent(QCloseEvent *event);
@@ -146,9 +151,12 @@ private:
     QAction *m_quit;
     AudioOutput m_audioOutput;
     QTimer m_autoUpdatetimer;
+    QString m_requestedSerial;
     quint32 m_prevBitRate = 2000000;
     int m_prevMaxSizeIndex = 0;
     QPointer<PresetConfigDialog> m_presetDialog;
+    PluginBridge *m_pluginBridge = nullptr;
+    QHash<QString, QString> m_deviceNames;
 };
 
 #endif // DIALOG_H

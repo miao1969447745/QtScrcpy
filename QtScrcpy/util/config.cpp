@@ -124,7 +124,7 @@
 #define SERIAL_WINDOW_RECT_KEY_H "WindowRectH"
 #define SERIAL_WINDOW_RECT_KEY_DEF -1
 #define SERIAL_NICK_NAME_KEY "NickName"
-#define SERIAL_NICK_NAME_DEF "Phone"
+#define SERIAL_NICK_NAME_DEF ""
 
 // IP history
 #define IP_HISTORY_KEY "IpHistory"

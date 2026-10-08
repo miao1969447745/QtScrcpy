@@ -1,5 +1,7 @@
 # QtScrcpy — ScrcpyGUI long-screenshot derivative
 
+This fork also supports the scrcpy-phone-control plugin via an authenticated loopback bridge and displays Android's real device names. See [联动使用说明](docs/plugin-bridge.md).
+
 > **Derivative notice (2026):** This branch is based on Barry Ran's QtScrcpy
 > `dev` branch and adds computer-side scrolling screenshot capture. Modified
 > source files carry ScrcpyGUI derivative notices. The original project and
