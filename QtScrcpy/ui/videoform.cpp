@@ -643,6 +643,11 @@ bool VideoForm::isLongScreenshotReady() const
         && !isMetalMode() && m_videoWidget && !m_frameSize.isEmpty();
 }
 
+LongScreenshotController *VideoForm::longScreenshotController() const
+{
+    return m_longScreenshotController;
+}
+
 QImage VideoForm::grabVideoFrame()
 {
     if (!m_videoWidget || m_frameSize.isEmpty()) {

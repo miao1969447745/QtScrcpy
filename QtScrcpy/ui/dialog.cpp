@@ -31,6 +31,8 @@
 #include <QTimer>
 #include <QVBoxLayout>
 #include <QUrl>
+#include <QJsonArray>
+#include <QJsonDocument>
 
 #include "config.h"
 #include "dialog.h"
@@ -117,6 +119,10 @@ Dialog::Dialog(QWidget *parent) : QWidget(parent), ui(new Ui::Widget)
         if (index >= 0) ui->serialBox->setCurrentIndex(index);
     });
     m_pluginBridge = new PluginBridge(this);
+    m_pluginBridge->setActionHandler([this](const QString &action, const QString &serial, const QJsonObject &parameters) {
+        return pluginPhoneAction(action, serial, parameters);
+    });
+    connect(&m_audioOutput, &AudioOutput::stateChanged, this, &Dialog::updateAudioButtons);
     m_wirelessDebugging = new WirelessDebugging(
         [this](const QString &serial, const QStringList &arguments, WirelessDebugging::Completion completion) {
             auto *adb = new qsc::AdbProcess(this);
@@ -147,6 +153,7 @@ Dialog::Dialog(QWidget *parent) : QWidget(parent), ui(new Ui::Widget)
         on_updateDevice_clicked();
     });
     updateWirelessDebugButton();
+    updateAudioButtons();
     const QStringList startupArgs = QCoreApplication::arguments();
     const int serialArg = startupArgs.indexOf(QStringLiteral("--serial"));
     if (serialArg >= 0 && serialArg + 1 < startupArgs.size()) {
@@ -893,7 +900,7 @@ void Dialog::updateVideoSourceUi()
     ui->refreshGameScriptBtn->setEnabled(!camera);
     ui->applyScriptBtn->setEnabled(!camera);
     ui->installSndcpyBtn->setEnabled(!camera);
-    ui->startAudioBtn->setEnabled(!camera);
+    updateAudioButtons();
     if (m_advancedDisplayGroup) {
         m_advancedDisplayGroup->setEnabled(!camera);
     }
@@ -911,6 +918,7 @@ void Dialog::startSelectedDeviceService()
 
 void Dialog::startDeviceService(const QString &serial)
 {
+    const QJsonObject pluginOptions = m_pluginServiceOptions.take(serial);
     const quint64 generation = ui->connectedPhoneList->generation(serial);
     if (!ui->connectedPhoneList->isCurrentStart(serial, generation)) return;
     const auto fail = [this, serial]() { ui->connectedPhoneList->setState(serial, DeviceServiceList::Failed); };
@@ -1019,6 +1027,47 @@ void Dialog::startDeviceService(const QString &serial)
         // for a later non-flex session, but never pass it to the server.
         params.crop = params.flexDisplay ? QString() : m_cropEdit->text().trimmed();
     }
+    // Plugin options apply to this request only; do not overwrite GUI settings.
+    if (!pluginOptions.isEmpty()) {
+        if (pluginOptions.contains("max_size")) params.maxSize = static_cast<quint16>(pluginOptions.value("max_size").toInt());
+        if (pluginOptions.contains("bit_rate")) params.bitRate = static_cast<quint32>(pluginOptions.value("bit_rate").toInt());
+        if (pluginOptions.contains("max_fps")) params.maxFps = static_cast<quint32>(pluginOptions.value("max_fps").toInt());
+        if (pluginOptions.contains("video_source")) {
+            params.videoSource = pluginOptions.value("video_source") == "camera" ? qsc::VIDEO_SOURCE_CAMERA : qsc::VIDEO_SOURCE_DISPLAY;
+            if (params.videoSource == qsc::VIDEO_SOURCE_CAMERA) {
+                // Do not inherit display-only options from the open GUI.
+                params.displayId = 0; params.newDisplay.clear(); params.flexDisplay = false; params.crop.clear();
+                if (!camera && params.captureOrientationLock == 0 && !pluginOptions.contains("orientation")) params.captureOrientation = 90;
+            }
+        }
+        if (pluginOptions.contains("camera_facing")) params.cameraFacing = pluginOptions.value("camera_facing") == "front" ? qsc::CAMERA_FACING_FRONT : qsc::CAMERA_FACING_BACK;
+        if (pluginOptions.contains("camera_id")) params.cameraId = pluginOptions.value("camera_id").toString();
+        if (pluginOptions.contains("orientation")) { params.captureOrientationLock = 1; params.captureOrientation = pluginOptions.value("orientation").toInt(); }
+        if (pluginOptions.contains("screen_off")) params.closeScreen = pluginOptions.value("screen_off").toBool();
+        if (pluginOptions.contains("stay_awake")) params.stayAwake = pluginOptions.value("stay_awake").toBool();
+        if (pluginOptions.contains("use_reverse")) params.useReverse = pluginOptions.value("use_reverse").toBool();
+        if (pluginOptions.contains("display")) params.display = pluginOptions.value("display").toBool();
+        if (pluginOptions.contains("record")) params.recordFile = pluginOptions.value("record").toBool();
+        if (pluginOptions.contains("record_path")) params.recordPath = pluginOptions.value("record_path").toString();
+        if (pluginOptions.contains("record_format")) params.recordFileFormat = pluginOptions.value("record_format").toString();
+        if (pluginOptions.contains("display_id")) params.displayId = pluginOptions.value("display_id").toInt();
+        if (pluginOptions.contains("new_display")) params.newDisplay = pluginOptions.value("new_display").toString();
+        if (pluginOptions.contains("flex_display")) params.flexDisplay = pluginOptions.value("flex_display").toBool();
+        if (pluginOptions.contains("crop")) params.crop = pluginOptions.value("crop").toString();
+        if (pluginOptions.contains("codec_options")) params.codecOptions = pluginOptions.value("codec_options").toString();
+        if (pluginOptions.contains("codec_name")) params.codecName = pluginOptions.value("codec_name").toString();
+        if (pluginOptions.contains("start_app")) params.startApp = pluginOptions.value("start_app").toString();
+        if (pluginOptions.contains("keep_active")) params.keepActive = pluginOptions.value("keep_active").toBool();
+        if (pluginOptions.contains("vd_destroy_content")) params.vdDestroyContent = pluginOptions.value("vd_destroy_content").toBool();
+        if (pluginOptions.contains("vd_system_decorations")) params.vdSystemDecorations = pluginOptions.value("vd_system_decorations").toBool();
+        if (pluginOptions.contains("display_ime_policy")) params.displayImePolicy = pluginOptions.value("display_ime_policy").toString();
+    }
+    if ((!params.display && !params.recordFile) || (params.recordFile && !QDir(params.recordPath).exists())) {
+        outLog("Recording requires an existing output directory; no-display requires recording."); fail(); return;
+    }
+    if (params.videoSource == qsc::VIDEO_SOURCE_CAMERA && (!params.newDisplay.isEmpty() || params.flexDisplay || params.displayId != 0 || !params.crop.isEmpty())) {
+        outLog("Camera capture does not accept display, virtual-display or crop options."); fail(); return;
+    }
     if (params.flexDisplay && (params.newDisplay.isEmpty() || !params.display || !params.crop.isEmpty())) {
         outLog(tr("flex display requires video, a new virtual display, and no crop"));
         fail();
@@ -1026,7 +1075,8 @@ void Dialog::startDeviceService(const QString &serial)
     }
 
     const bool needsVirtualDisplayCheck = !params.newDisplay.isEmpty();
-    if (!camera && !needsVirtualDisplayCheck) {
+    const bool captureCamera = params.videoSource == qsc::VIDEO_SOURCE_CAMERA;
+    if (!captureCamera && !needsVirtualDisplayCheck) {
         if (!qsc::IDeviceManage::getInstance().connectDevice(params)) fail();
         return;
     }
@@ -1034,7 +1084,7 @@ void Dialog::startDeviceService(const QString &serial)
     auto *versionAdb = new qsc::AdbProcess(this);
     m_serviceChecks.insert(serial, versionAdb);
     connect(versionAdb, &qsc::AdbProcess::adbProcessResult, this,
-            [this, versionAdb, camera, params, generation, fail](qsc::AdbProcess::ADB_EXEC_RESULT result) {
+            [this, versionAdb, captureCamera, params, generation, fail](qsc::AdbProcess::ADB_EXEC_RESULT result) {
         if (result == qsc::AdbProcess::AER_SUCCESS_START) return;
         if (!ui->connectedPhoneList->isCurrentStart(params.serial, generation)) {
             versionAdb->deleteLater();
@@ -1044,11 +1094,11 @@ void Dialog::startDeviceService(const QString &serial)
         if (result == qsc::AdbProcess::AER_SUCCESS_EXEC) {
             bool ok = false;
             const int sdk = versionAdb->getStdOut().trimmed().toInt(&ok);
-            const int minimumSdk = camera ? 31 : 29;
+            const int minimumSdk = captureCamera ? 31 : 29;
             if (ok && sdk >= minimumSdk) {
                 if (!qsc::IDeviceManage::getInstance().connectDevice(params)) fail();
             } else {
-                outLog(camera ? tr("camera preview requires Android 12 or later")
+                outLog(captureCamera ? tr("camera preview requires Android 12 or later")
                               : tr("virtual display requires Android 10 or later"));
                 fail();
             }
@@ -1672,6 +1722,7 @@ void Dialog::on_useSingleModeCheck_clicked()
 
 void Dialog::on_serialBox_currentTextChanged(const QString &arg1)
 {
+    updateAudioButtons();
     ui->connectedPhoneList->selectSerial(arg1.trimmed());
     ui->userNameEdt->setText(Config::getInstance().getNickName(arg1));
     if (m_wirelessDebugging) {
@@ -1754,6 +1805,111 @@ void Dialog::on_startAudioBtn_clicked()
     }
 
     m_audioOutput.start(ui->serialBox->currentText(), 28200);
+}
+
+void Dialog::updateAudioButtons()
+{
+    const AudioOutput::State state = m_audioOutput.state();
+    const bool idle = state == AudioOutput::Stopped || state == AudioOutput::Failed;
+    ui->startAudioBtn->setEnabled(idle && ui->videoSourceBox->currentIndex() != qsc::VIDEO_SOURCE_CAMERA && ui->serialBox->count() > 0);
+    ui->stopAudioBtn->setEnabled(state == AudioOutput::Running);
+    ui->installSndcpyBtn->setEnabled(idle && ui->serialBox->count() > 0);
+}
+
+QJsonObject Dialog::pluginPhoneAction(const QString &action, const QString &serial, const QJsonObject &p)
+{
+    const auto error = [](const QString &message) { return QJsonObject{{"ok", false}, {"error", message}}; };
+    if (action == "device_list") {
+        QJsonArray devices;
+        for (int row = 0; row < ui->connectedPhoneList->topLevelItemCount(); ++row) {
+            const QString deviceSerial = ui->connectedPhoneList->topLevelItem(row)->data(0, Qt::UserRole).toString();
+            QJsonObject item = pluginPhoneAction("service_status", deviceSerial, {});
+            item.insert("device_name", deviceDisplayName(deviceSerial)); devices.append(item);
+        }
+        return {{"ok", true}, {"devices", devices}};
+    }
+    if (action == "keymap_list") {
+        QJsonArray names;
+        for (int i = 0; i < ui->gameBox->count(); ++i) if (!ui->gameBox->itemText(i).isEmpty()) names.append(ui->gameBox->itemText(i));
+        return {{"ok", true}, {"keymaps", names}};
+    }
+    if (action == "service_stop_all") {
+        const QJsonArray serials = p.value("serials").toArray();
+        // Validate every identity before stopping anything.
+        for (const QJsonValue &value : serials) {
+            if (ui->serialBox->findText(value.toString()) < 0 && !qsc::IDeviceManage::getInstance().getDevice(value.toString()))
+                return error("An explicit stop-all target is not known to this QtScrcpy instance.");
+        }
+        QJsonArray results;
+        for (const QJsonValue &value : serials) results.append(pluginPhoneAction("service_stop", value.toString(), {}));
+        return {{"ok", true}, {"devices", results}};
+    }
+    const bool available = ui->serialBox->findText(serial) >= 0;
+    auto device = qsc::IDeviceManage::getInstance().getDevice(serial);
+    if (action == "service_status") {
+        const char *names[] = {"stopped", "starting", "running", "stopping", "failed"};
+        return {{"ok", true}, {"serial", serial}, {"available", available},
+                {"state", names[static_cast<int>(ui->connectedPhoneList->state(serial))]},
+                {"camera", device && device->isCameraMode()}, {"flex_display", device && device->isFlexDisplay()},
+                {"custom_keymap", device && device->isCurrentCustomKeymap()}};
+    }
+    if (!available && !device) return error("Device is offline or absent from the GUI device list.");
+    if (action == "service_start" || action == "record_start") {
+        if (!available) return error("Device is offline.");
+        const auto state = ui->connectedPhoneList->state(serial);
+        if (state != DeviceServiceList::Stopped && state != DeviceServiceList::Failed) return error("Stop the existing session explicitly before changing startup/recording configuration.");
+        QJsonObject options = p.value("options").toObject();
+        if (action == "record_start") { options = p; options.insert("record", true); }
+        if (options.contains("orientation") && options.value("orientation").toInt() % 90 != 0) return error("Orientation must be 0, 90, 180 or 270.");
+        const QRegularExpression safeCodec("^[A-Za-z0-9_.,:=+/-]+$");
+        for (const QString &key : {QString("codec_options"), QString("codec_name"), QString("camera_id"), QString("start_app")})
+            if (options.contains(key) && !safeCodec.match(options.value(key).toString()).hasMatch()) return error("Unsafe server option syntax: " + key);
+        if (options.contains("crop") && !QRegularExpression("^[0-9]{1,5}:[0-9]{1,5}:[0-9]{1,5}:[0-9]{1,5}$").match(options.value("crop").toString()).hasMatch()) return error("Crop must be width:height:x:y.");
+        if (options.contains("new_display") && !QRegularExpression("^[0-9]{1,4}x[0-9]{1,4}(/[0-9]{1,4})?$").match(options.value("new_display").toString()).hasMatch()) return error("New display must be WIDTHxHEIGHT[/DPI].");
+        if (options.contains("record_path") && (!QFileInfo(options.value("record_path").toString()).isAbsolute() || !QDir(options.value("record_path").toString()).exists())) return error("Recording path must be an explicit existing absolute directory.");
+        m_pluginServiceOptions.insert(serial, options);
+        ui->connectedPhoneList->requestStart(serial);
+        return pluginPhoneAction("service_status", serial, {});
+    }
+    if (action == "service_stop" || action == "record_stop") {
+        ui->connectedPhoneList->requestStop(serial);
+        if (device && ui->connectedPhoneList->state(serial) != DeviceServiceList::Stopped) stopDeviceService(serial);
+        auto result = pluginPhoneAction("service_status", serial, {});
+        if (action == "record_stop") result.insert("notice", "Recording stops by ending this QtScrcpy session, including its preview.");
+        return result;
+    }
+    if (action == "keymap_apply" || action == "keymap_clear") {
+        if (!device || device->isCameraMode()) return error("Key mappings require an open display session.");
+        QString script;
+        if (action == "keymap_apply") {
+            const QString name = p.value("name").toString();
+            if (name.contains('/') || name.contains('\\') || !name.endsWith(".json") || ui->gameBox->findText(name) < 0) return error("Choose an existing keymap name from keymap_list.");
+            script = getGameScript(name);
+            if (script.size() > 1024 * 1024 || !QJsonDocument::fromJson(script.toUtf8()).isObject()) return error("Invalid keymap JSON.");
+        }
+        device->updateScript(script);
+        return {{"ok", true}, {"delivery", "keymap_updated_for_selected_device"}};
+    }
+    if (action.startsWith("wireless_")) {
+        if (action == "wireless_status") {
+            const auto state = m_wirelessDebugging->state(serial);
+            if (state.mode == WirelessDebugging::Unknown && !state.checking && !state.changing) m_wirelessDebugging->refresh(serial);
+        } else if (!m_wirelessDebugging->setEnabled(serial, action == "wireless_enable")) return error("Wireless debugging is busy; do not automatically retry a state change.");
+        const auto state = m_wirelessDebugging->state(serial);
+        return {{"ok", true}, {"serial", serial}, {"state", state.changing ? "changing" : (state.checking ? "checking" : "settled")},
+                {"mode", state.mode == WirelessDebugging::Enabled ? "enabled" : (state.mode == WirelessDebugging::Disabled ? "disabled" : "unknown")},
+                {"notice", "Traditional port-5555 network ADB, not Android TLS wireless-pairing settings. Poll wireless_status for confirmation."}};
+    }
+    if (action.startsWith("audio_")) {
+        if (action == "audio_start" && !m_audioOutput.start(serial, 28200)) return error("Audio startup was rejected: " + m_audioOutput.status().value("error").toString());
+        if (action == "audio_install" && !m_audioOutput.installonly(serial, 28200)) return error("Audio helper installation was rejected.");
+        if (action == "audio_stop") {
+            if (m_audioOutput.serial() != serial) return error("Another device owns the audio session.");
+            m_audioOutput.stop();
+        }
+        auto result = m_audioOutput.status(); result.insert("ok", true); return result;
+    }
+    return error("Unknown GUI phone action.");
 }
 
 void Dialog::on_stopAudioBtn_clicked()

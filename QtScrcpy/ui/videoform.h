@@ -44,6 +44,7 @@ public:
     // ScrcpyGUI derivative change: long screenshots use the current rendered frame
     // and QtScrcpy's existing touch-injection path.
     void startLongScreenshot();
+    LongScreenshotController *longScreenshotController() const;
     bool isLongScreenshotReady() const;
     QImage grabVideoFrame();
     bool injectLongScreenshotTouch(QEvent::Type type, qreal xRatio, qreal yRatio,

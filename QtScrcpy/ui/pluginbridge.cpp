@@ -22,6 +22,13 @@
 #include <cmath>
 
 #include "videoform.h"
+#include "longscreenshot.h"
+#include "phonefeatures.h"
+#include "adbprocess.h"
+#include <QApplication>
+#include <QClipboard>
+#include <memory>
+#include <limits>
 
 namespace {
 constexpr int kProtocolVersion = 1;
@@ -34,6 +41,8 @@ bool exactInteger(const QJsonValue &value, qint64 expected)
 
 QString bridgeFilePath()
 {
+    const QString explicitPath = qEnvironmentVariable("QTSCRCPY_BRIDGE_FILE");
+    if (!explicitPath.isEmpty()) return explicitPath;
     QString base = qEnvironmentVariable("LOCALAPPDATA");
     if (base.isEmpty()) {
         base = QStandardPaths::writableLocation(QStandardPaths::GenericDataLocation);
@@ -66,6 +75,10 @@ PluginBridge::PluginBridge(QObject *parent)
     auto *leases = new QTimer(this);
     connect(leases, &QTimer::timeout, this, [this]() {
         const qint64 now = QDateTime::currentMSecsSinceEpoch();
+        for (auto it = m_jobs.begin(); it != m_jobs.end();) {
+            if (it->result.value("state").toString() != "running" && now - it->created > 600000) it = m_jobs.erase(it);
+            else ++it;
+        }
         for (DeviceEntry &entry : m_devices) {
             if (!entry.touchOwner.isEmpty() && now >= entry.touchDeadline) {
                 if (entry.form) {
@@ -91,6 +104,8 @@ PluginBridge::PluginBridge(QObject *parent)
 
 PluginBridge::~PluginBridge()
 {
+    const auto jobs = m_jobs;
+    for (const Job &job : jobs) if (job.cancel && job.result.value("state").toString() == "running") job.cancel();
     removeDiscoveryFile();
 }
 
@@ -179,8 +194,44 @@ QJsonObject PluginBridge::dispatch(const QJsonObject &request)
                 {QStringLiteral("protocol"), kProtocolVersion},
                 {QStringLiteral("server_version"), QStringLiteral("4.1")},
                 {QStringLiteral("application"), QStringLiteral("QtScrcpy")},
+                {QStringLiteral("feature_api"), 1},
                 {QStringLiteral("application_version"), QCoreApplication::applicationVersion()}};
     }
+    if (operation == "capabilities") return {{"ok", true}, {"catalog", PhoneFeatures::catalog()}};
+    if (operation == "qt_batch") {
+        if (!request.value("requests").isArray()) return error("Expected explicit target requests.");
+        const QJsonArray requests = request.value("requests").toArray();
+        if (requests.isEmpty() || requests.size() > 20) return error("Batch requires 1..20 explicit targets.");
+        QSet<QString> targets;
+        for (const QJsonValue &value : requests) {
+            if (!value.isObject()) return error("Invalid target request.");
+            const QJsonObject child = value.toObject();
+            const QString serial = child.value("serial").toString();
+            auto form = m_devices.value(serial).form;
+            QJsonObject parameters = child.value("parameters").toObject(), definition;
+            QString reason;
+            if (!PhoneFeatures::prepare(child.value("action").toString(), parameters, definition, reason)
+                    || definition.value("kind") != "native" || targets.contains(serial) || !form
+                    || !child.value("parameters").isObject()
+                    || !m_devices.value(serial).touchOwner.isEmpty() || form->longScreenshotController()->isActive()
+                    || !exactInteger(child.value("capture_epoch"), form->pluginCaptureEpoch())
+                    || !exactInteger(child.value("width"), form->frameSize().width())
+                    || !exactInteger(child.value("height"), form->frameSize().height())
+                    || (definition.value("confirmed").toBool() && request.value("confirmed") != QJsonValue(true)))
+                return error("Batch target/action/observation is invalid; nothing was dispatched.");
+            targets.insert(serial);
+        }
+        QJsonArray results;
+        for (const QJsonValue &value : requests) {
+            QJsonObject child = value.toObject();
+            child.insert("session_id", request.value("session_id")); child.insert("confirmed", request.value("confirmed"));
+            const QJsonObject result = dispatchPhoneAction(child);
+            results.append(result);
+            if (result.value("ok") != QJsonValue(true)) return {{"ok", true}, {"partial", true}, {"results", results}, {"action_may_have_executed", true}};
+        }
+        return {{"ok", true}, {"results", results}, {"delivery", "sent_to_explicit_targets; not an atomic transaction or UI verification"}};
+    }
+    if (operation == "qt_action") return dispatchPhoneAction(request);
     if (operation == QStringLiteral("list")) {
         QJsonArray devices;
         QStringList serials = m_devices.keys();
@@ -249,6 +300,7 @@ QJsonObject PluginBridge::dispatch(const QJsonObject &request)
         || !exactInteger(request.value(QStringLiteral("height")), form->frameSize().height())) {
         return error(QStringLiteral("Capture changed; observe the phone again before acting."));
     }
+    if (form->longScreenshotController()->isActive()) return error("Long screenshot is active; query or cancel it before other input.");
 
     if (operation == QStringLiteral("touch")) {
         const QString action = request.value(QStringLiteral("action")).toString();
@@ -308,6 +360,189 @@ QJsonObject PluginBridge::dispatch(const QJsonObject &request)
     }
 
     return error(QStringLiteral("Unsupported bridge operation."));
+}
+
+void PluginBridge::setActionHandler(std::function<QJsonObject(const QString &, const QString &, const QJsonObject &)> handler)
+{
+    m_actionHandler = handler;
+}
+
+QString PluginBridge::newJob(const QString &serial, const QString &owner, std::function<void()> cancel)
+{
+    if (m_jobs.size() >= 32) {
+        QString oldest;
+        qint64 time = std::numeric_limits<qint64>::max();
+        for (auto it = m_jobs.cbegin(); it != m_jobs.cend(); ++it) {
+            if (it->result.value("state").toString() != "running" && it->created < time) { oldest = it.key(); time = it->created; }
+        }
+        if (oldest.isEmpty()) return {};
+        m_jobs.remove(oldest);
+    }
+    const QString id = QUuid::createUuid().toString(QUuid::WithoutBraces);
+    Job job;
+    job.serial = serial; job.owner = owner; job.cancel = cancel; job.created = QDateTime::currentMSecsSinceEpoch();
+    job.result = {{"state", "running"}, {"serial", serial}, {"job_id", id}};
+    m_jobs.insert(id, job);
+    return id;
+}
+
+void PluginBridge::finishJob(const QString &id, const QJsonObject &result)
+{
+    auto it = m_jobs.find(id);
+    if (it == m_jobs.end() || it->result.value("state").toString() != "running") return;
+    for (auto field = result.begin(); field != result.end(); ++field) it->result.insert(field.key(), field.value());
+    it->cancel = {};
+}
+
+QJsonObject PluginBridge::startAdbJob(const QString &serial, const QString &owner, const QStringList &arguments)
+{
+    auto *adb = new qsc::AdbProcess(this);
+    const QPointer<qsc::AdbProcess> safe(adb);
+    const QString id = newJob(serial, owner, [safe]() { if (safe) safe->kill(); });
+    if (id.isEmpty()) { adb->deleteLater(); return error("Too many active jobs."); }
+    connect(adb, &qsc::AdbProcess::adbProcessResult, this, [this, adb, id](qsc::AdbProcess::ADB_EXEC_RESULT result) {
+        if (result == qsc::AdbProcess::AER_SUCCESS_START) return;
+        const bool success = result == qsc::AdbProcess::AER_SUCCESS_EXEC;
+        finishJob(id, {{"state", success ? "completed" : "failed"},
+                       {"stdout", adb->getStdOut().left(32768)}, {"stderr", adb->getErrorOut().left(8192)},
+                       {"output_may_be_truncated", adb->getStdOut().size() > 32768},
+                       {"delivery", "ADB process completion; phone UI outcome not verified"}});
+        adb->deleteLater();
+    });
+    QTimer::singleShot(120000, adb, [this, adb, id]() {
+        if (m_jobs.value(id).result.value("state").toString() != "running") return;
+        finishJob(id, {{"state", "failed"}, {"error", "ADB job timed out; changes or partial file copies may already exist."}});
+        adb->kill(); adb->deleteLater();
+    });
+    adb->execute(serial, arguments);
+    return {{"ok", true}, {"job", m_jobs.value(id).result}};
+}
+
+QJsonObject PluginBridge::dispatchPhoneAction(const QJsonObject &request)
+{
+    const QString action = request.value("action").toString();
+    if (!request.value("parameters").isObject()) return error("Expected parameters object.");
+    QJsonObject parameters = request.value("parameters").toObject(), definition;
+    QString reason;
+    if (!PhoneFeatures::prepare(action, parameters, definition, reason)) return error(reason);
+    if (definition.value("confirmed").toBool() && request.value("confirmed") != QJsonValue(true))
+        return error("This action requires explicit user authorization (confirmed=true is only an attestation).");
+    const QString owner = request.value("session_id").toString();
+    if (owner.size() < 8 || owner.size() > 64) return error("Invalid action owner.");
+    const QString kind = definition.value("kind").toString();
+    if (kind == "job") {
+        const QString id = parameters.value("job_id").toString();
+        auto it = m_jobs.find(id);
+        if (it == m_jobs.end() || it->owner != owner) return error("Job is absent, expired, or owned by another plugin session.");
+        if (action == "job_cancel" && it->result.value("state").toString() == "running") {
+            auto cancel = it->cancel;
+            finishJob(id, {{"state", "cancelled"}, {"notice", "Already delivered input or partial copies are not undone."}});
+            if (cancel) cancel();
+        }
+        return {{"ok", true}, {"job", m_jobs.value(id).result}};
+    }
+    const QString serial = request.value("serial").toString();
+    if (definition.value("serial").toBool() && serial.isEmpty()) return error("Explicit device serial is required.");
+    auto it = m_devices.find(serial);
+    VideoForm *form = it != m_devices.end() ? it->form.data() : nullptr;
+    if (definition.value("guard").toBool()) {
+        if (!form || !exactInteger(request.value("capture_epoch"), form->pluginCaptureEpoch())
+                || !exactInteger(request.value("width"), form->frameSize().width())
+                || !exactInteger(request.value("height"), form->frameSize().height())) return error("Observe the selected device again; capture changed or is not open.");
+        if (!it->touchOwner.isEmpty() || form->longScreenshotController()->isActive()) return error("Device has an active gesture or long screenshot.");
+    }
+    if (kind == "dialog") return m_actionHandler ? m_actionHandler(action, serial, parameters) : error("GUI action handler is unavailable.");
+    if (kind == "native") {
+        auto device = qsc::IDeviceManage::getInstance().getDevice(serial);
+        if (action == "scroll") {
+            if (!form || parameters.value("x").toInt() >= form->frameSize().width()
+                    || parameters.value("y").toInt() >= form->frameSize().height()
+                    || (device && device->isCurrentCustomKeymap())) return error("Invalid scroll target or custom key mapping active.");
+            parameters.insert("width", form->frameSize().width()); parameters.insert("height", form->frameSize().height());
+        }
+        if (action == "clipboard_set" && parameters.value("text").toString().toUtf8().size() > 65536) return error("Phone clipboard text exceeds 64 KiB.");
+        if (!device || !device->pluginCommand(action, parameters)) return error("Operation is incompatible with this camera/display session.");
+        return {{"ok", true}, {"delivery", "sent_to_native_control; UI outcome not verified"}, {"serial", serial}};
+    }
+    if (kind == "screenshot") {
+        const QImage image = form->pluginFrame();
+        if (image.isNull()) return error("No decoded phone image.");
+        QApplication::clipboard()->setImage(image);
+        return {{"ok", true}, {"state", "completed"}, {"clipboard_written", true}, {"saved_file", false},
+                {"width", image.width()}, {"height", image.height()}};
+    }
+    if (kind == "longshot") {
+        const QPointer<LongScreenshotController> controller(form->longScreenshotController());
+        const QString id = newJob(serial, owner, [controller]() { if (controller) controller->cancel(); });
+        if (id.isEmpty()) return error("Too many active jobs.");
+        auto *scope = new QObject(this);
+        connect(controller, &LongScreenshotController::finished, scope, [this, id, scope](const QJsonObject &result) {
+            finishJob(id, result); scope->deleteLater();
+        });
+        connect(form, &QObject::destroyed, scope, [this, id, scope]() { finishJob(id, {{"state", "failed"}, {"error", "Device window closed."}}); scope->deleteLater(); });
+        if (!controller->startRemote(parameters.value("max_frames").toInt())) {
+            finishJob(id, {{"state", "failed"}, {"error", "Long screenshot unavailable in this session or key mapping mode."}});
+            scope->deleteLater();
+        }
+        return {{"ok", true}, {"job", m_jobs.value(id).result}};
+    }
+    if (kind == "clipboard") {
+        auto device = qsc::IDeviceManage::getInstance().getDevice(serial);
+        if (!device || device->isCameraMode()) return error("Phone clipboard is unavailable in camera mode.");
+        if (m_clipboardPending.contains(serial)) return error("A clipboard reply is already pending for this device.");
+        auto *scope = new QObject(this);
+        const QPointer<QObject> safe(scope);
+        const QString id = newJob(serial, owner, [safe]() { if (safe) safe->deleteLater(); });
+        if (id.isEmpty()) { scope->deleteLater(); return error("Too many active jobs."); }
+        m_clipboardPending.insert(serial);
+        connect(scope, &QObject::destroyed, this, [this, serial]() { m_clipboardPending.remove(serial); });
+        connect(device, &qsc::IDevice::clipboardReceived, scope, [this, id, scope](const QString &text) {
+            finishJob(id, {{"state", "completed"}, {"text", text.left(65536)}, {"computer_clipboard_may_change", true}}); scope->deleteLater();
+        });
+        QTimer::singleShot(3000, scope, [this, id, scope]() { finishJob(id, {{"state", "failed"}, {"error", "Phone clipboard reply timed out; no cached text substituted."}}); scope->deleteLater(); });
+        if (!device->pluginCommand("clipboard_get", {})) {
+            finishJob(id, {{"state", "failed"}, {"error", "Clipboard control channel is unavailable."}});
+            scope->deleteLater();
+        }
+        return {{"ok", true}, {"job", m_jobs.value(id).result}};
+    }
+    if (kind == "adb") {
+        if (!m_actionHandler || m_actionHandler("service_status", serial, {}).value("available") != QJsonValue(true)) return error("Device is offline or absent from the GUI's authorized device list.");
+        QStringList arguments;
+        if (action == "push_file" || action == "pull_file" || action == "install_apk") {
+            const QString local = parameters.value("local_path").toString();
+            const QFileInfo file(local);
+            if (!file.isAbsolute() || file.isSymLink()) return error("Use an explicit absolute non-symlink local file path.");
+            if (action == "pull_file") {
+                if (file.exists() || !file.dir().exists()) return error("Pull destination must be a new file in an existing directory; no overwrite.");
+            } else if (!file.exists() || !file.isFile()) return error("Local input file does not exist.");
+            if (action == "install_apk") {
+                if (file.suffix().toLower() != "apk") return error("Installation requires an APK file.");
+                arguments << "install" << "-r" << file.absoluteFilePath();
+            } else {
+                const QString remote = parameters.value("remote_path").toString();
+                static const QRegularExpression safeRemote("^/[A-Za-z0-9_./ -]+$");
+                if (!safeRemote.match(remote).hasMatch() || remote.contains("..")) return error("Use an absolute Android file path without traversal or shell syntax.");
+                arguments << (action == "push_file" ? "push" : "pull");
+                arguments << (action == "push_file" ? file.absoluteFilePath() : remote);
+                arguments << (action == "push_file" ? remote : file.absoluteFilePath());
+            }
+        } else if (action == "show_touches") arguments << "shell" << "settings" << "put" << "system" << "show_touches" << (parameters.value("enabled").toBool() ? "1" : "0");
+        else if (action == "query_apps") arguments << "shell" << "pm" << "list" << "packages";
+        else if (action == "query_ip") arguments << "shell" << "ip" << "-o" << "addr" << "show" << "wlan0";
+        else if (action == "query_device") arguments << "shell" << "getprop";
+        else if (action == "query_displays") arguments << "shell" << "dumpsys" << "display";
+        else if (action == "query_cameras") arguments << "shell" << "dumpsys" << "media.camera";
+        else if (action == "network_connect" || action == "network_disconnect") {
+            const QString address = parameters.value("address").toString();
+            static const QRegularExpression safeAddress("^(?:[A-Za-z0-9][A-Za-z0-9.-]*|\\[[0-9A-Fa-f:]+\\]):[0-9]{1,5}$");
+            if (!safeAddress.match(address).hasMatch() || address.section(':', -1).toInt() < 1 || address.section(':', -1).toInt() > 65535) return error("Invalid explicit network address and port.");
+            if (action == "network_disconnect" && serial != address) return error("Network disconnect must target the selected network serial exactly.");
+            arguments << (action == "network_connect" ? "connect" : "disconnect") << address;
+        } else return error("Unknown ADB action.");
+        return startAdbJob(serial, owner, arguments);
+    }
+    return error("Phone action has no handler.");
 }
 
 QJsonObject PluginBridge::error(const QString &message) const

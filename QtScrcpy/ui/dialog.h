@@ -42,6 +42,7 @@ public:
     void getIPbyIp();
     // show the main window (e.g. when hidden in the tray) and give it focus
     void bringToFront();
+    QJsonObject pluginPhoneAction(const QString &action, const QString &serial, const QJsonObject &parameters);
 
 private slots:
     void onDeviceConnected(bool success, const QString& serial, const QString& deviceName, const QSize& size);
@@ -113,6 +114,7 @@ private:
     void updateDeviceDisplay(const QString &serial);
     void queryRealDeviceName(const QString &serial);
     void updateWirelessDebugButton();
+    void updateAudioButtons();
     void startDeviceService(const QString &serial);
     void startSelectedDeviceService();
     void stopDeviceService(const QString &serial);
@@ -160,6 +162,7 @@ private:
     QHash<QString, QString> m_deviceNames;
     WirelessDebugging *m_wirelessDebugging = nullptr;
     QHash<QString, QPointer<qsc::AdbProcess>> m_serviceChecks;
+    QHash<QString, QJsonObject> m_pluginServiceOptions;
 };
 
 #endif // DIALOG_H

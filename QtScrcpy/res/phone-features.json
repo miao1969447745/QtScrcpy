@@ -1,0 +1,942 @@
+{
+  "feature_api": 1,
+  "actions": {
+    "device_list": {
+      "kind": "dialog",
+      "guard": false,
+      "confirmed": false,
+      "serial": false,
+      "parameters": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      },
+      "required": []
+    },
+    "service_status": {
+      "kind": "dialog",
+      "guard": false,
+      "confirmed": false,
+      "serial": true,
+      "parameters": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      },
+      "required": []
+    },
+    "service_start": {
+      "kind": "dialog",
+      "guard": false,
+      "confirmed": true,
+      "serial": true,
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "options": {
+            "type": "object",
+            "properties": {
+              "max_size": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 8192
+              },
+              "bit_rate": {
+                "type": "integer",
+                "minimum": 100000,
+                "maximum": 100000000
+              },
+              "max_fps": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 240
+              },
+              "video_source": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 10,
+                "enum": [
+                  "display",
+                  "camera"
+                ]
+              },
+              "camera_facing": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 8,
+                "enum": [
+                  "front",
+                  "back"
+                ]
+              },
+              "camera_id": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 64
+              },
+              "orientation": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 270
+              },
+              "screen_off": {
+                "type": "boolean"
+              },
+              "stay_awake": {
+                "type": "boolean"
+              },
+              "use_reverse": {
+                "type": "boolean"
+              },
+              "display": {
+                "type": "boolean"
+              },
+              "record": {
+                "type": "boolean"
+              },
+              "record_path": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 4096
+              },
+              "record_format": {
+                "type": "string",
+                "minLength": 3,
+                "maxLength": 3,
+                "enum": [
+                  "mp4",
+                  "mkv"
+                ]
+              },
+              "display_id": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 1000
+              },
+              "new_display": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 100
+              },
+              "flex_display": {
+                "type": "boolean"
+              },
+              "crop": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 100
+              },
+              "codec_options": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 2048
+              },
+              "codec_name": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 255
+              },
+              "start_app": {
+                "type": "string",
+                "minLength": 3,
+                "maxLength": 255
+              },
+              "vd_destroy_content": {
+                "type": "boolean"
+              },
+              "vd_system_decorations": {
+                "type": "boolean"
+              },
+              "display_ime_policy": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 10,
+                "enum": [
+                  "local",
+                  "fallback",
+                  "hide"
+                ]
+              },
+              "keep_active": {
+                "type": "boolean"
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "additionalProperties": false
+      },
+      "required": []
+    },
+    "service_stop": {
+      "kind": "dialog",
+      "guard": false,
+      "confirmed": true,
+      "serial": true,
+      "parameters": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      },
+      "required": []
+    },
+    "service_stop_all": {
+      "kind": "dialog",
+      "guard": false,
+      "confirmed": true,
+      "serial": false,
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "serials": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            },
+            "minItems": 1,
+            "maxItems": 100,
+            "uniqueItems": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "required": [
+        "serials"
+      ]
+    },
+    "record_start": {
+      "kind": "dialog",
+      "guard": false,
+      "confirmed": true,
+      "serial": true,
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "record_path": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 4096
+          },
+          "record_format": {
+            "type": "string",
+            "minLength": 3,
+            "maxLength": 3,
+            "enum": [
+              "mp4",
+              "mkv"
+            ],
+            "default": "mp4"
+          }
+        },
+        "additionalProperties": false
+      },
+      "required": [
+        "record_path"
+      ]
+    },
+    "record_stop": {
+      "kind": "dialog",
+      "guard": false,
+      "confirmed": true,
+      "serial": true,
+      "parameters": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      },
+      "required": []
+    },
+    "keymap_list": {
+      "kind": "dialog",
+      "guard": false,
+      "confirmed": false,
+      "serial": false,
+      "parameters": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      },
+      "required": []
+    },
+    "keymap_apply": {
+      "kind": "dialog",
+      "guard": true,
+      "confirmed": true,
+      "serial": true,
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 255
+          }
+        },
+        "additionalProperties": false
+      },
+      "required": [
+        "name"
+      ]
+    },
+    "keymap_clear": {
+      "kind": "dialog",
+      "guard": true,
+      "confirmed": true,
+      "serial": true,
+      "parameters": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      },
+      "required": []
+    },
+    "wireless_status": {
+      "kind": "dialog",
+      "guard": false,
+      "confirmed": false,
+      "serial": true,
+      "parameters": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      },
+      "required": []
+    },
+    "wireless_enable": {
+      "kind": "dialog",
+      "guard": false,
+      "confirmed": true,
+      "serial": true,
+      "parameters": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      },
+      "required": []
+    },
+    "wireless_disable": {
+      "kind": "dialog",
+      "guard": false,
+      "confirmed": true,
+      "serial": true,
+      "parameters": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      },
+      "required": []
+    },
+    "audio_status": {
+      "kind": "dialog",
+      "guard": false,
+      "confirmed": false,
+      "serial": true,
+      "parameters": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      },
+      "required": []
+    },
+    "audio_start": {
+      "kind": "dialog",
+      "guard": false,
+      "confirmed": true,
+      "serial": true,
+      "parameters": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      },
+      "required": []
+    },
+    "audio_stop": {
+      "kind": "dialog",
+      "guard": false,
+      "confirmed": true,
+      "serial": true,
+      "parameters": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      },
+      "required": []
+    },
+    "audio_install": {
+      "kind": "dialog",
+      "guard": false,
+      "confirmed": true,
+      "serial": true,
+      "parameters": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      },
+      "required": []
+    },
+    "power": {
+      "kind": "native",
+      "guard": true,
+      "confirmed": true,
+      "serial": true,
+      "parameters": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      },
+      "required": []
+    },
+    "notifications": {
+      "kind": "native",
+      "guard": true,
+      "confirmed": false,
+      "serial": true,
+      "parameters": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      },
+      "required": []
+    },
+    "quick_settings": {
+      "kind": "native",
+      "guard": true,
+      "confirmed": false,
+      "serial": true,
+      "parameters": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      },
+      "required": []
+    },
+    "collapse_panels": {
+      "kind": "native",
+      "guard": true,
+      "confirmed": false,
+      "serial": true,
+      "parameters": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      },
+      "required": []
+    },
+    "rotate": {
+      "kind": "native",
+      "guard": true,
+      "confirmed": false,
+      "serial": true,
+      "parameters": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      },
+      "required": []
+    },
+    "copy": {
+      "kind": "native",
+      "guard": true,
+      "confirmed": false,
+      "serial": true,
+      "parameters": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      },
+      "required": []
+    },
+    "cut": {
+      "kind": "native",
+      "guard": true,
+      "confirmed": true,
+      "serial": true,
+      "parameters": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      },
+      "required": []
+    },
+    "clipboard_paste": {
+      "kind": "native",
+      "guard": true,
+      "confirmed": true,
+      "serial": true,
+      "parameters": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      },
+      "required": []
+    },
+    "back_or_screen_on": {
+      "kind": "native",
+      "guard": true,
+      "confirmed": true,
+      "serial": true,
+      "parameters": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      },
+      "required": []
+    },
+    "camera_zoom_in": {
+      "kind": "native",
+      "guard": true,
+      "confirmed": false,
+      "serial": true,
+      "parameters": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      },
+      "required": []
+    },
+    "camera_zoom_out": {
+      "kind": "native",
+      "guard": true,
+      "confirmed": false,
+      "serial": true,
+      "parameters": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      },
+      "required": []
+    },
+    "screen_power": {
+      "kind": "native",
+      "guard": true,
+      "confirmed": false,
+      "serial": true,
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "enabled": {
+            "type": "boolean"
+          }
+        },
+        "additionalProperties": false
+      },
+      "required": [
+        "enabled"
+      ]
+    },
+    "camera_torch": {
+      "kind": "native",
+      "guard": true,
+      "confirmed": false,
+      "serial": true,
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "enabled": {
+            "type": "boolean"
+          }
+        },
+        "additionalProperties": false
+      },
+      "required": [
+        "enabled"
+      ]
+    },
+    "resize_display": {
+      "kind": "native",
+      "guard": true,
+      "confirmed": false,
+      "serial": true,
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "display_width": {
+            "type": "integer",
+            "minimum": 320,
+            "maximum": 8192
+          },
+          "display_height": {
+            "type": "integer",
+            "minimum": 320,
+            "maximum": 8192
+          }
+        },
+        "additionalProperties": false
+      },
+      "required": [
+        "display_width",
+        "display_height"
+      ]
+    },
+    "scroll": {
+      "kind": "native",
+      "guard": true,
+      "confirmed": false,
+      "serial": true,
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "x": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 8191
+          },
+          "y": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 8191
+          },
+          "horizontal": {
+            "type": "integer",
+            "minimum": -1280,
+            "maximum": 1280,
+            "default": 0
+          },
+          "vertical": {
+            "type": "integer",
+            "minimum": -1280,
+            "maximum": 1280,
+            "default": 0
+          }
+        },
+        "additionalProperties": false
+      },
+      "required": [
+        "x",
+        "y"
+      ]
+    },
+    "clipboard_set": {
+      "kind": "native",
+      "guard": true,
+      "confirmed": true,
+      "serial": true,
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "text": {
+            "type": "string",
+            "minLength": 0,
+            "maxLength": 65536
+          },
+          "paste": {
+            "type": "boolean",
+            "default": false
+          }
+        },
+        "additionalProperties": false
+      },
+      "required": [
+        "text"
+      ]
+    },
+    "clipboard_get": {
+      "kind": "clipboard",
+      "guard": true,
+      "confirmed": true,
+      "serial": true,
+      "parameters": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      },
+      "required": []
+    },
+    "screenshot": {
+      "kind": "screenshot",
+      "guard": true,
+      "confirmed": true,
+      "serial": true,
+      "parameters": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      },
+      "required": []
+    },
+    "long_screenshot": {
+      "kind": "longshot",
+      "guard": true,
+      "confirmed": true,
+      "serial": true,
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "max_frames": {
+            "type": "integer",
+            "minimum": 2,
+            "maximum": 99,
+            "default": 99
+          }
+        },
+        "additionalProperties": false
+      },
+      "required": []
+    },
+    "push_file": {
+      "kind": "adb",
+      "guard": false,
+      "confirmed": true,
+      "serial": true,
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "local_path": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 4096
+          },
+          "remote_path": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 4096
+          }
+        },
+        "additionalProperties": false
+      },
+      "required": [
+        "local_path",
+        "remote_path"
+      ]
+    },
+    "pull_file": {
+      "kind": "adb",
+      "guard": false,
+      "confirmed": true,
+      "serial": true,
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "local_path": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 4096
+          },
+          "remote_path": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 4096
+          }
+        },
+        "additionalProperties": false
+      },
+      "required": [
+        "local_path",
+        "remote_path"
+      ]
+    },
+    "install_apk": {
+      "kind": "adb",
+      "guard": false,
+      "confirmed": true,
+      "serial": true,
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "local_path": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 4096
+          }
+        },
+        "additionalProperties": false
+      },
+      "required": [
+        "local_path"
+      ]
+    },
+    "show_touches": {
+      "kind": "adb",
+      "guard": true,
+      "confirmed": true,
+      "serial": true,
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "enabled": {
+            "type": "boolean"
+          }
+        },
+        "additionalProperties": false
+      },
+      "required": [
+        "enabled"
+      ]
+    },
+    "query_apps": {
+      "kind": "adb",
+      "guard": false,
+      "confirmed": false,
+      "serial": true,
+      "parameters": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      },
+      "required": []
+    },
+    "query_ip": {
+      "kind": "adb",
+      "guard": false,
+      "confirmed": false,
+      "serial": true,
+      "parameters": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      },
+      "required": []
+    },
+    "query_device": {
+      "kind": "adb",
+      "guard": false,
+      "confirmed": false,
+      "serial": true,
+      "parameters": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      },
+      "required": []
+    },
+    "query_displays": {
+      "kind": "adb",
+      "guard": false,
+      "confirmed": false,
+      "serial": true,
+      "parameters": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      },
+      "required": []
+    },
+    "query_cameras": {
+      "kind": "adb",
+      "guard": false,
+      "confirmed": false,
+      "serial": true,
+      "parameters": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      },
+      "required": []
+    },
+    "network_connect": {
+      "kind": "adb",
+      "guard": false,
+      "confirmed": true,
+      "serial": true,
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "address": {
+            "type": "string",
+            "minLength": 3,
+            "maxLength": 255
+          }
+        },
+        "additionalProperties": false
+      },
+      "required": [
+        "address"
+      ]
+    },
+    "network_disconnect": {
+      "kind": "adb",
+      "guard": false,
+      "confirmed": true,
+      "serial": true,
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "address": {
+            "type": "string",
+            "minLength": 3,
+            "maxLength": 255
+          }
+        },
+        "additionalProperties": false
+      },
+      "required": [
+        "address"
+      ]
+    },
+    "job_status": {
+      "kind": "job",
+      "guard": false,
+      "confirmed": false,
+      "serial": false,
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "job_id": {
+            "type": "string",
+            "minLength": 8,
+            "maxLength": 64
+          }
+        },
+        "additionalProperties": false
+      },
+      "required": [
+        "job_id"
+      ]
+    },
+    "job_cancel": {
+      "kind": "job",
+      "guard": false,
+      "confirmed": false,
+      "serial": false,
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "job_id": {
+            "type": "string",
+            "minLength": 8,
+            "maxLength": 64
+          }
+        },
+        "additionalProperties": false
+      },
+      "required": [
+        "job_id"
+      ]
+    },
+    "android_key": {
+      "kind": "native",
+      "guard": true,
+      "confirmed": true,
+      "serial": true,
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "keycode": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 300
+          },
+          "metastate": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 7340031,
+            "default": 0
+          }
+        },
+        "additionalProperties": false
+      },
+      "required": [
+        "keycode"
+      ]
+    }
+  },
+  "excluded": [
+    "computer desktop/window actions",
+    "global ADB start/stop",
+    "unrestricted shell/ADB commands",
+    "root/unlock/protected capture bypass"
+  ],
+  "batch": "Use explicit per-device calls; no implicit group broadcast."
+}

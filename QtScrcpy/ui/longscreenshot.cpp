@@ -60,6 +60,31 @@ void LongScreenshotController::start()
         return;
     }
 
+    begin(maxFrames, false);
+}
+
+bool LongScreenshotController::startRemote(int maxFrames)
+{
+    if (m_active || !m_videoForm || !m_videoForm->isLongScreenshotReady()
+            || m_videoForm->pluginFrame().isNull() || maxFrames < 2 || maxFrames > 99) return false;
+    begin(maxFrames, true);
+    return true;
+}
+
+void LongScreenshotController::schedule(int delay, std::function<void()> callback)
+{
+    const quint64 generation = m_runGeneration;
+    QTimer::singleShot(delay, this, [this, generation, callback]() {
+        if (m_active && generation == m_runGeneration) callback();
+    });
+}
+
+void LongScreenshotController::begin(int maxFrames, bool remote)
+{
+    m_remote = remote;
+    ++m_runGeneration;
+    m_epoch = m_videoForm->pluginCaptureEpoch();
+    m_fingerDown = false;
     m_active = true;
     m_cancelled = false;
     m_maxFrames = maxFrames;
@@ -71,6 +96,7 @@ void LongScreenshotController::start()
     m_beforeSwipe = QImage();
     m_lastProbe = QImage();
 
+    if (!remote) {
     m_progress = new QProgressDialog(tr("正在读取第一屏…"), tr("取消"), 0, m_maxFrames,
                                      m_videoForm);
     m_progress->setWindowTitle(tr("电脑兼容拼接长截图"));
@@ -80,8 +106,28 @@ void LongScreenshotController::start()
     m_progress->setMinimumDuration(0);
     connect(m_progress, &QProgressDialog::canceled, this, [this]() { m_cancelled = true; });
     m_progress->show();
+    }
 
-    QTimer::singleShot(120, this, &LongScreenshotController::captureInitialFrame);
+    schedule(remote ? 0 : 120, [this]() { captureInitialFrame(); });
+}
+
+void LongScreenshotController::releaseFinger()
+{
+    if (!m_fingerDown || !m_videoForm) return;
+    m_fingerDown = false;
+    if (m_remote) {
+        const QSize size = m_videoForm->frameSize();
+        m_videoForm->injectPluginTouch("up", size.width() / 2, qMax(0, size.height() / 2));
+    } else {
+        m_videoForm->injectLongScreenshotTouch(QEvent::MouseButtonRelease, 0.5, 0.5, Qt::LeftButton, Qt::NoButton);
+    }
+}
+
+void LongScreenshotController::cancel()
+{
+    if (!m_active) return;
+    m_cancelled = true;
+    abort(QString(), false);
 }
 
 void LongScreenshotController::captureInitialFrame()
@@ -137,9 +183,28 @@ void LongScreenshotController::sendSwipeStep()
     const qreal startY = 0.85;
     const qreal endY = startY - m_swipePercent / 100.0;
     bool sent = false;
+    if (m_remote) {
+        if (m_videoForm->pluginCaptureEpoch() != m_epoch) { abort(tr("截图期间采集会话发生变化。")); return; }
+        const QSize size = m_videoForm->frameSize();
+        const qreal progress = qMin(m_swipeStep, kSwipeSteps) / static_cast<qreal>(kSwipeSteps);
+        const QString action = m_swipeStep == 0 ? "down" : (m_swipeStep <= kSwipeSteps ? "move" : "up");
+        sent = m_videoForm->injectPluginTouch(action, size.width() / 2,
+                   qBound(0, qRound((startY + (endY - startY) * progress) * size.height()), size.height() - 1));
+        if (sent && action == "down") m_fingerDown = true;
+        if (action == "up") m_fingerDown = false;
+        if (!sent) { abort(tr("无法向设备发送滑动操作。")); return; }
+        if (m_swipeStep > kSwipeSteps) {
+            schedule(kSettlePollDelayMs, [this]() { pollForSettledFrame(); });
+            return;
+        }
+        ++m_swipeStep;
+        schedule(kSwipeStepDelayMs, [this]() { sendSwipeStep(); });
+        return;
+    }
     if (m_swipeStep == 0) {
         sent = m_videoForm->injectLongScreenshotTouch(
             QEvent::MouseButtonPress, 0.5, startY, Qt::LeftButton, Qt::LeftButton);
+        m_fingerDown = sent;
     } else if (m_swipeStep <= kSwipeSteps) {
         const qreal progress = m_swipeStep / static_cast<qreal>(kSwipeSteps);
         const qreal y = startY + (endY - startY) * progress;
@@ -148,12 +213,12 @@ void LongScreenshotController::sendSwipeStep()
     } else {
         sent = m_videoForm->injectLongScreenshotTouch(
             QEvent::MouseButtonRelease, 0.5, endY, Qt::LeftButton, Qt::NoButton);
+        m_fingerDown = false;
         if (!sent) {
             abort(tr("无法向设备发送滑动操作。"));
             return;
         }
-        QTimer::singleShot(kSettlePollDelayMs, this,
-                           &LongScreenshotController::pollForSettledFrame);
+        schedule(kSettlePollDelayMs, [this]() { pollForSettledFrame(); });
         return;
     }
 
@@ -162,7 +227,7 @@ void LongScreenshotController::sendSwipeStep()
         return;
     }
     ++m_swipeStep;
-    QTimer::singleShot(kSwipeStepDelayMs, this, &LongScreenshotController::sendSwipeStep);
+    schedule(kSwipeStepDelayMs, [this]() { sendSwipeStep(); });
 }
 
 void LongScreenshotController::pollForSettledFrame()
@@ -197,8 +262,7 @@ void LongScreenshotController::pollForSettledFrame()
     }
 
     m_lastProbe = current;
-    QTimer::singleShot(kSettlePollDelayMs, this,
-                       &LongScreenshotController::pollForSettledFrame);
+    schedule(kSettlePollDelayMs, [this]() { pollForSettledFrame(); });
 }
 
 void LongScreenshotController::acceptPostSwipeFrame(const QImage &frame)
@@ -210,7 +274,7 @@ void LongScreenshotController::acceptPostSwipeFrame(const QImage &frame)
             return;
         }
         updateProgress(tr("画面没有继续移动，正在确认是否已到达底部…"));
-        QTimer::singleShot(80, this, &LongScreenshotController::beginSwipe);
+        schedule(80, [this]() { beginSwipe(); });
         return;
     }
 
@@ -223,7 +287,7 @@ void LongScreenshotController::acceptPostSwipeFrame(const QImage &frame)
         finish(false);
         return;
     }
-    QTimer::singleShot(80, this, &LongScreenshotController::beginSwipe);
+    schedule(80, [this]() { beginSwipe(); });
 }
 
 void LongScreenshotController::finish(bool reachedBottom)
@@ -267,11 +331,17 @@ void LongScreenshotController::finish(bool reachedBottom)
     m_progress = nullptr;
     m_frames.clear();
     m_active = false;
-    QMessageBox::information(m_videoForm, tr("长截图完成"), message);
+    ++m_runGeneration;
+    emit finished({{"state", "completed"}, {"clipboard_written", true}, {"saved_file", false},
+                   {"frames", frameCount}, {"width", resultSize.width()}, {"height", resultSize.height()},
+                   {"fixed_top", result.fixedTop}, {"fixed_bottom", result.fixedBottom},
+                   {"reached_bottom", reachedBottom}, {"message", message}});
+    if (!m_remote) QMessageBox::information(m_videoForm, tr("长截图完成"), message);
 }
 
 void LongScreenshotController::abort(const QString &message, bool showMessage)
 {
+    releaseFinger();
     if (m_progress) {
         m_progress->close();
         m_progress->deleteLater();
@@ -281,14 +351,16 @@ void LongScreenshotController::abort(const QString &message, bool showMessage)
     m_beforeSwipe = QImage();
     m_lastProbe = QImage();
     m_active = false;
-    if (showMessage && !message.isEmpty() && m_videoForm) {
+    ++m_runGeneration;
+    emit finished({{"state", message.isEmpty() ? "cancelled" : "failed"}, {"error", message}, {"clipboard_written", false}});
+    if (!m_remote && showMessage && !message.isEmpty() && m_videoForm) {
         QMessageBox::warning(m_videoForm, tr("长截图"), message);
     }
 }
 
 bool LongScreenshotController::isCancelled() const
 {
-    return m_cancelled || !m_videoForm;
+    return m_cancelled || !m_videoForm || (m_remote && m_videoForm->pluginCaptureEpoch() != m_epoch);
 }
 
 QImage LongScreenshotController::captureFrame() const
@@ -296,7 +368,7 @@ QImage LongScreenshotController::captureFrame() const
     if (!m_videoForm) {
         return QImage();
     }
-    return m_videoForm->grabVideoFrame().convertToFormat(QImage::Format_RGB32);
+    return (m_remote ? m_videoForm->pluginFrame() : m_videoForm->grabVideoFrame()).convertToFormat(QImage::Format_RGB32);
 }
 
 void LongScreenshotController::updateProgress(const QString &message)

@@ -2,6 +2,8 @@
 
 This fork also supports the scrcpy-phone-control plugin via an authenticated loopback bridge and displays Android's real device names. See [联动使用说明](docs/plugin-bridge.md).
 
+QtScrcpy 4.2.1.5 + plugin 0.3.0 exposes 50 typed phone actions (including queries and jobs): clipboard-only scrolling screenshots, recording, camera, audio, files/APK, wireless, and explicit per-device controls. See [完整手机功能接口说明](docs/phone-features.md) for parameters, authorization and test limitations. It does not expose desktop automation, unrestricted shell, global ADB control, or protection bypasses.
+
 > **Derivative notice (2026):** This branch is based on Barry Ran's QtScrcpy
 > `dev` branch and adds computer-side scrolling screenshot capture. Modified
 > source files carry ScrcpyGUI derivative notices. The original project and

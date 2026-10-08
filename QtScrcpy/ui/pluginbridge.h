@@ -2,11 +2,14 @@
 #define PLUGINBRIDGE_H
 
 #include <QHash>
+#include <QSet>
 #include <QObject>
 #include <QPointer>
 #include <QSize>
 #include <QString>
 #include <QPoint>
+#include <QJsonObject>
+#include <functional>
 
 class QJsonObject;
 class QTcpServer;
@@ -28,8 +31,10 @@ public:
     void registerDevice(const QString &serial, const QString &deviceName, VideoForm *form);
     void unregisterDevice(const QString &serial);
     void updateDeviceName(const QString &serial, const QString &deviceName);
+    void setActionHandler(std::function<QJsonObject(const QString &, const QString &, const QJsonObject &)> handler);
 
 private:
+    friend class PhoneBridgeTests;
     struct DeviceEntry {
         QString name;
         QPointer<VideoForm> form;
@@ -44,6 +49,11 @@ private:
     QJsonObject error(const QString &message) const;
     void reply(QTcpSocket *socket, const QJsonObject &response);
     bool writeDiscoveryFile();
+    QJsonObject dispatchPhoneAction(const QJsonObject &request);
+    QJsonObject startAdbJob(const QString &serial, const QString &owner, const QStringList &arguments);
+    QString newJob(const QString &serial, const QString &owner, std::function<void()> cancel);
+    void finishJob(const QString &id, const QJsonObject &result);
+    struct Job { QString serial, owner; QJsonObject result; qint64 created = 0; std::function<void()> cancel; };
     void removeDiscoveryFile();
 
 private:
@@ -52,6 +62,9 @@ private:
     QString m_discoveryFile;
     QHash<QString, DeviceEntry> m_devices;
     QHash<QTcpSocket *, QByteArray> m_buffers;
+    QHash<QString, Job> m_jobs;
+    QSet<QString> m_clipboardPending;
+    std::function<QJsonObject(const QString &, const QString &, const QJsonObject &)> m_actionHandler;
 };
 
 #endif // PLUGINBRIDGE_H

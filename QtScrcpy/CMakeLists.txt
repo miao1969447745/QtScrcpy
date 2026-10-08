@@ -181,6 +181,8 @@ set(QC_UI_SOURCES
     ui/longscreenshot.cpp
     ui/pluginbridge.h
     ui/pluginbridge.cpp
+    ui/phonefeatures.h
+    ui/phonefeatures.cpp
     ui/wirelessdebugging.h
     ui/wirelessdebugging.cpp
     ui/deviceservicelist.h
@@ -451,4 +453,16 @@ if(QSC_BUILD_UI_TESTS)
         RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/../output/${QC_CPU_ARCH}/${CMAKE_BUILD_TYPE}/$<0:>")
     add_test(NAME DeviceServiceCancelRestart COMMAND DeviceServiceCancelTests)
     set_tests_properties(DeviceServiceCancelRestart PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
+    set(QSC_FEATURE_TEST_SOURCES ${QC_PROJECT_SOURCES})
+    list(REMOVE_ITEM QSC_FEATURE_TEST_SOURCES main.cpp)
+    add_executable(PhoneBridgeTests tests/phonebridge_test.cpp ${QSC_FEATURE_TEST_SOURCES})
+    target_include_directories(PhoneBridgeTests PRIVATE fontawesome util uibase ui render)
+    target_link_libraries(PhoneBridgeTests PRIVATE ${LINK_LIBS} QtScrcpyCore)
+    if(MINGW)
+        target_link_libraries(PhoneBridgeTests PRIVATE dwmapi)
+    endif()
+    set_target_properties(PhoneBridgeTests PROPERTIES
+        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/../output/${QC_CPU_ARCH}/${CMAKE_BUILD_TYPE}/$<0:>")
+    add_test(NAME PhoneFeatureBridgeAndStitch COMMAND PhoneBridgeTests)
+    set_tests_properties(PhoneFeatureBridgeAndStitch PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
 endif()

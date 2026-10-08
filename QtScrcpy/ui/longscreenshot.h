@@ -10,6 +10,8 @@
 #include <QPointer>
 #include <QStringList>
 #include <QVector>
+#include <QJsonObject>
+#include <functional>
 
 class QProgressDialog;
 class VideoForm;
@@ -21,8 +23,17 @@ class LongScreenshotController : public QObject
 public:
     explicit LongScreenshotController(VideoForm *videoForm);
     void start();
+    bool startRemote(int maxFrames = 99);
+    void cancel();
+    bool isActive() const { return m_active; }
+signals:
+    void finished(const QJsonObject &result);
 
 private:
+    friend class PhoneBridgeTests;
+    void begin(int maxFrames, bool remote);
+    void releaseFinger();
+    void schedule(int delay, std::function<void()> callback);
     struct StitchResult {
         QImage image;
         int fixedTop = 0;
@@ -74,6 +85,10 @@ private:
     bool m_changedAfterSwipe = false;
     bool m_active = false;
     bool m_cancelled = false;
+    bool m_remote = false;
+    bool m_fingerDown = false;
+    quint64 m_epoch = 0;
+    quint64 m_runGeneration = 0;
 };
 
 #endif // LONGSCREENSHOT_H
