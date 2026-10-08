@@ -196,7 +196,7 @@
    <item>
     <widget class="QPushButton" name="longScreenshotBtn">
      <property name="toolTip">
-      <string>long screenshot to clipboard</string>
+      <string notr="true">电脑兼容拼接长截图（完成后复制到剪贴板）</string>
      </property>
      <property name="text">
       <string/>

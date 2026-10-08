@@ -8,10 +8,12 @@
 #include <QTcpSocket>
 #include <QTimer>
 #include <QDebug>
+#include <QPushButton>
 #include <cstdio>
 #include "pluginbridge.h"
 #include "phonefeatures.h"
 #include "videoform.h"
+#include "toolform.h"
 #include "longscreenshot.h"
 
 class PhoneBridgeTests
@@ -20,7 +22,7 @@ public:
     static int run()
     {
         int failures = 0;
-        const auto check = [&failures](bool value, const char *message) { if (!value) { qCritical() << message; ++failures; } };
+        const auto check = [&failures](bool value, const char *message) { if (!value) { std::fprintf(stderr, "%s\n", message); ++failures; } };
         QTemporaryDir temporary;
         qputenv("QTSCRCPY_BRIDGE_FILE", (temporary.path() + "/bridge.json").toUtf8());
         qputenv("QTSCRCPY_CONFIG_PATH", (temporary.path() + "/config").toUtf8());
@@ -69,6 +71,10 @@ public:
         });
         check(request(action).value("serial") == "OFFLINE-TEST", "serial preserved through handler");
         VideoForm form(false, false, false);
+        ToolForm toolbar(&form, ToolForm::AP_OUTSIDE_RIGHT);
+        const auto longScreenshotButton = toolbar.findChild<QPushButton *>("longScreenshotBtn");
+        check(longScreenshotButton && longScreenshotButton->toolTip() == QString::fromUtf8("电脑兼容拼接长截图（完成后复制到剪贴板）"),
+              "long screenshot tooltip is Chinese without requiring a translator");
         form.setSerial("OFFLINE-TEST");
         bridge.registerDevice("OFFLINE-TEST", "Synthetic only", &form);
         action.insert("action", "long_screenshot");
