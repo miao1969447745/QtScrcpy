@@ -725,4 +725,51 @@
         <translation>새로 고침</translation>
     </message>
 </context>
+<context>
+    <name>DeviceServiceList</name>
+    <message>
+        <source>Device name</source>
+        <translation>기기 이름</translation>
+    </message>
+    <message>
+        <source>Service status</source>
+        <translation>서비스 상태</translation>
+    </message>
+    <message>
+        <source>Actions</source>
+        <translation>작업</translation>
+    </message>
+    <message>
+        <source>Start service</source>
+        <translation>서비스 시작</translation>
+    </message>
+    <message>
+        <source>Stop service</source>
+        <translation>서비스 중지</translation>
+    </message>
+    <message>
+        <source>Stopped</source>
+        <translation>중지됨</translation>
+    </message>
+    <message>
+        <source>Offline</source>
+        <translation>오프라인</translation>
+    </message>
+    <message>
+        <source>Starting...</source>
+        <translation>시작 중…</translation>
+    </message>
+    <message>
+        <source>Running</source>
+        <translation>실행 중</translation>
+    </message>
+    <message>
+        <source>Stopping...</source>
+        <translation>중지 중…</translation>
+    </message>
+    <message>
+        <source>Start failed</source>
+        <translation>시작 실패</translation>
+    </message>
+</context>
 </TS>

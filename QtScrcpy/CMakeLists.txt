@@ -183,6 +183,8 @@ set(QC_UI_SOURCES
     ui/pluginbridge.cpp
     ui/wirelessdebugging.h
     ui/wirelessdebugging.cpp
+    ui/deviceservicelist.h
+    ui/deviceservicelist.cpp
     ui/videoform.h
     ui/videoform.cpp
     ui/videoform.ui
@@ -205,6 +207,13 @@ if(QSC_BUILD_UI_TESTS)
     target_link_libraries(WirelessDebugTests PRIVATE Qt${QT_DESIRED_VERSION}::Core)
     add_test(NAME WirelessDebugState COMMAND WirelessDebugTests
         ${CMAKE_CURRENT_SOURCE_DIR}/res/i18n/zh_CN.qm)
+    add_executable(DeviceServiceListTests tests/deviceservicelist_test.cpp
+        ui/deviceservicelist.cpp ui/deviceservicelist.h)
+    target_include_directories(DeviceServiceListTests PRIVATE ui)
+    target_link_libraries(DeviceServiceListTests PRIVATE Qt${QT_DESIRED_VERSION}::Widgets)
+    add_test(NAME DeviceServiceListState COMMAND DeviceServiceListTests
+        ${CMAKE_CURRENT_SOURCE_DIR}/res/i18n/zh_CN.qm)
+    set_tests_properties(DeviceServiceListState PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
 endif()
 
 # group controller
@@ -434,3 +443,12 @@ target_link_libraries(${PROJECT_NAME} PRIVATE
     ${LINK_LIBS}
     QtScrcpyCore
 )
+
+if(QSC_BUILD_UI_TESTS)
+    add_executable(DeviceServiceCancelTests tests/deviceservicecancel_test.cpp)
+    target_link_libraries(DeviceServiceCancelTests PRIVATE Qt${QT_DESIRED_VERSION}::Widgets QtScrcpyCore)
+    set_target_properties(DeviceServiceCancelTests PROPERTIES
+        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/../output/${QC_CPU_ARCH}/${CMAKE_BUILD_TYPE}/$<0:>")
+    add_test(NAME DeviceServiceCancelRestart COMMAND DeviceServiceCancelTests)
+    set_tests_properties(DeviceServiceCancelRestart PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
+endif()

@@ -725,4 +725,51 @@
         <translation>编码器设置...</translation>
     </message>
 </context>
+<context>
+    <name>DeviceServiceList</name>
+    <message>
+        <source>Device name</source>
+        <translation>设备名称</translation>
+    </message>
+    <message>
+        <source>Service status</source>
+        <translation>服务状态</translation>
+    </message>
+    <message>
+        <source>Actions</source>
+        <translation>操作</translation>
+    </message>
+    <message>
+        <source>Start service</source>
+        <translation>启动服务</translation>
+    </message>
+    <message>
+        <source>Stop service</source>
+        <translation>停止服务</translation>
+    </message>
+    <message>
+        <source>Stopped</source>
+        <translation>未启动</translation>
+    </message>
+    <message>
+        <source>Offline</source>
+        <translation>离线</translation>
+    </message>
+    <message>
+        <source>Starting...</source>
+        <translation>正在启动…</translation>
+    </message>
+    <message>
+        <source>Running</source>
+        <translation>已启动</translation>
+    </message>
+    <message>
+        <source>Stopping...</source>
+        <translation>正在停止…</translation>
+    </message>
+    <message>
+        <source>Start failed</source>
+        <translation>启动失败</translation>
+    </message>
+</context>
 </TS>

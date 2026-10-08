@@ -35,6 +35,7 @@
 #include "config.h"
 #include "dialog.h"
 #include "wirelessdebugging.h"
+#include "deviceservicelist.h"
 #include "ui_dialog.h"
 #include "videoform.h"
 #include "pluginbridge.h"
@@ -109,6 +110,12 @@ Dialog::Dialog(QWidget *parent) : QWidget(parent), ui(new Ui::Widget)
     ui->setupUi(this);
     initializeKeyMapDirectory();
     initUI();
+    connect(ui->connectedPhoneList, &DeviceServiceList::startRequested, this, &Dialog::startDeviceService);
+    connect(ui->connectedPhoneList, &DeviceServiceList::stopRequested, this, &Dialog::stopDeviceService);
+    connect(ui->connectedPhoneList, &DeviceServiceList::serialSelected, this, [this](const QString &serial) {
+        const int index = ui->serialBox->findText(serial);
+        if (index >= 0) ui->serialBox->setCurrentIndex(index);
+    });
     m_pluginBridge = new PluginBridge(this);
     m_wirelessDebugging = new WirelessDebugging(
         [this](const QString &serial, const QStringList &arguments, WirelessDebugging::Completion completion) {
@@ -223,10 +230,10 @@ Dialog::Dialog(QWidget *parent) : QWidget(parent), ui(new Ui::Widget)
                 const QString selectedSerial = ui->serialBox->currentText();
                 const QSignalBlocker serialSignals(ui->serialBox);
                 ui->serialBox->clear();
-                ui->connectedPhoneList->clear();
+                ui->connectedPhoneList->setDevices(devices);
                 for (auto &item : devices) {
                     ui->serialBox->addItem(item);
-                    ui->connectedPhoneList->addItem(deviceDisplayName(item) + " - " + item);
+                    ui->connectedPhoneList->setDeviceName(item, deviceDisplayName(item));
                     queryRealDeviceName(item);
                 }
                 const int selectedIndex = ui->serialBox->findText(selectedSerial);
@@ -234,7 +241,7 @@ Dialog::Dialog(QWidget *parent) : QWidget(parent), ui(new Ui::Widget)
                 if (!m_requestedSerial.isEmpty() && devices.contains(m_requestedSerial)) {
                     ui->serialBox->setCurrentIndex(ui->serialBox->findText(m_requestedSerial));
                     m_requestedSerial.clear();
-                    QTimer::singleShot(0, this, &Dialog::on_startServerBtn_clicked);
+                    QTimer::singleShot(0, this, &Dialog::startSelectedDeviceService);
                 }
                 on_serialBox_currentTextChanged(ui->serialBox->currentText());
             } else if (args.contains("show") && args.contains("wlan0")) {
@@ -897,14 +904,26 @@ void Dialog::on_videoSourceBox_currentIndexChanged(int)
     updateVideoSourceUi();
 }
 
-void Dialog::on_startServerBtn_clicked()
+void Dialog::startSelectedDeviceService()
 {
+    ui->connectedPhoneList->requestStart(ui->serialBox->currentText().trimmed());
+}
+
+void Dialog::startDeviceService(const QString &serial)
+{
+    const quint64 generation = ui->connectedPhoneList->generation(serial);
+    if (!ui->connectedPhoneList->isCurrentStart(serial, generation)) return;
+    const auto fail = [this, serial]() { ui->connectedPhoneList->setState(serial, DeviceServiceList::Failed); };
+    if (qsc::IDeviceManage::getInstance().getDevice(serial)) {
+        fail();
+        return;
+    }
     outLog("start server...", false);
 
     // this is ok that "original" toUshort is 0
     quint16 videoSize = ui->maxSizeBox->currentText().trimmed().toUShort();
     qsc::DeviceParams params;
-    params.serial = ui->serialBox->currentText().trimmed();
+    params.serial = serial;
     params.maxSize = videoSize;
     params.bitRate = getBitRate();
     // on devices with Android >= 10, the capture frame rate can be limited
@@ -975,6 +994,7 @@ void Dialog::on_startServerBtn_clicked()
             const int displayId = m_displayIdEdit->text().trimmed().toInt(&ok);
             if (!ok || displayId < 0) {
                 outLog(tr("invalid display ID"));
+                fail();
                 return;
             }
             params.displayId = displayId;
@@ -1001,35 +1021,53 @@ void Dialog::on_startServerBtn_clicked()
     }
     if (params.flexDisplay && (params.newDisplay.isEmpty() || !params.display || !params.crop.isEmpty())) {
         outLog(tr("flex display requires video, a new virtual display, and no crop"));
+        fail();
         return;
     }
 
     const bool needsVirtualDisplayCheck = !params.newDisplay.isEmpty();
     if (!camera && !needsVirtualDisplayCheck) {
-        qsc::IDeviceManage::getInstance().connectDevice(params);
+        if (!qsc::IDeviceManage::getInstance().connectDevice(params)) fail();
         return;
     }
 
     auto *versionAdb = new qsc::AdbProcess(this);
+    m_serviceChecks.insert(serial, versionAdb);
     connect(versionAdb, &qsc::AdbProcess::adbProcessResult, this,
-            [this, versionAdb, camera, params](qsc::AdbProcess::ADB_EXEC_RESULT result) {
+            [this, versionAdb, camera, params, generation, fail](qsc::AdbProcess::ADB_EXEC_RESULT result) {
+        if (result == qsc::AdbProcess::AER_SUCCESS_START) return;
+        if (!ui->connectedPhoneList->isCurrentStart(params.serial, generation)) {
+            versionAdb->deleteLater();
+            return;
+        }
+        m_serviceChecks.remove(params.serial);
         if (result == qsc::AdbProcess::AER_SUCCESS_EXEC) {
             bool ok = false;
             const int sdk = versionAdb->getStdOut().trimmed().toInt(&ok);
             const int minimumSdk = camera ? 31 : 29;
             if (ok && sdk >= minimumSdk) {
-                qsc::IDeviceManage::getInstance().connectDevice(params);
+                if (!qsc::IDeviceManage::getInstance().connectDevice(params)) fail();
             } else {
                 outLog(camera ? tr("camera preview requires Android 12 or later")
                               : tr("virtual display requires Android 10 or later"));
+                fail();
             }
             versionAdb->deleteLater();
         } else if (result == qsc::AdbProcess::AER_ERROR_EXEC
                    || result == qsc::AdbProcess::AER_ERROR_START
                    || result == qsc::AdbProcess::AER_ERROR_MISSING_BINARY) {
             outLog(tr("could not verify Android version for camera preview"));
+            fail();
             versionAdb->deleteLater();
         }
+    });
+    QTimer::singleShot(5000, versionAdb, [this, versionAdb, serial, generation, fail]() {
+        if (!ui->connectedPhoneList->isCurrentStart(serial, generation)
+                || m_serviceChecks.value(serial) != versionAdb) return;
+        m_serviceChecks.remove(serial);
+        fail();
+        versionAdb->kill();
+        versionAdb->deleteLater();
     });
     versionAdb->execute(params.serial, QStringList() << "shell" << "getprop" << "ro.build.version.sdk");
 }
@@ -1198,11 +1236,17 @@ void Dialog::refreshApps()
     pushAdb->push(serial, getServerPath(), Config::getInstance().getServerPath());
 }
 
-void Dialog::on_stopServerBtn_clicked()
+void Dialog::stopDeviceService(const QString &serial)
 {
-    if (qsc::IDeviceManage::getInstance().disconnectDevice(ui->serialBox->currentText().trimmed())) {
+    const auto check = m_serviceChecks.take(serial);
+    if (check) {
+        check->kill();
+        check->deleteLater();
+    }
+    if (qsc::IDeviceManage::getInstance().disconnectDevice(serial)) {
         outLog("stop server");
     }
+    ui->connectedPhoneList->setState(serial, DeviceServiceList::Stopped);
 }
 
 void Dialog::on_wirelessConnectBtn_clicked()
@@ -1360,8 +1404,10 @@ void Dialog::getIPbyIp()
 void Dialog::onDeviceConnected(bool success, const QString &serial, const QString &deviceName, const QSize &size)
 {
     if (!success) {
+        ui->connectedPhoneList->setState(serial, DeviceServiceList::Failed);
         return;
     }
+    ui->connectedPhoneList->setState(serial, DeviceServiceList::Running);
     if (!deviceName.trimmed().isEmpty() && !m_deviceNames.contains(serial)) {
         m_deviceNames.insert(serial, deviceName.trimmed());
     }
@@ -1405,10 +1451,12 @@ void Dialog::onDeviceConnected(bool success, const QString &serial, const QStrin
 #endif
 
     GroupController::instance().addDevice(serial);
+    updateDeviceDisplay(serial);
 }
 
 void Dialog::onDeviceDisconnected(QString serial)
 {
+    ui->connectedPhoneList->setState(serial, DeviceServiceList::Stopped);
     if (m_pluginBridge) {
         m_pluginBridge->unregisterDevice(serial);
     }
@@ -1469,6 +1517,7 @@ void Dialog::on_clearOut_clicked()
 
 void Dialog::on_stopAllServerBtn_clicked()
 {
+    ui->connectedPhoneList->requestStopAll();
     qsc::IDeviceManage::getInstance().disconnectAllDevice();
 }
 
@@ -1533,7 +1582,7 @@ void Dialog::on_usbConnectBtn_clicked()
     }
     ui->serialBox->setCurrentIndex(firstUsbDevice);
 
-    on_startServerBtn_clicked();
+    startSelectedDeviceService();
 }
 
 int Dialog::findDeviceFromeSerialBox(bool wifi)
@@ -1594,14 +1643,7 @@ void Dialog::on_wifiConnectBtn_clicked()
     }
     ui->serialBox->setCurrentIndex(firstWifiDevice);
 
-    on_startServerBtn_clicked();
-}
-
-void Dialog::on_connectedPhoneList_itemDoubleClicked(QListWidgetItem *item)
-{
-    Q_UNUSED(item);
-    ui->serialBox->setCurrentIndex(ui->connectedPhoneList->currentRow());
-    on_startServerBtn_clicked();
+    startSelectedDeviceService();
 }
 
 void Dialog::on_updateNameBtn_clicked()
@@ -1630,6 +1672,7 @@ void Dialog::on_useSingleModeCheck_clicked()
 
 void Dialog::on_serialBox_currentTextChanged(const QString &arg1)
 {
+    ui->connectedPhoneList->selectSerial(arg1.trimmed());
     ui->userNameEdt->setText(Config::getInstance().getNickName(arg1));
     if (m_wirelessDebugging) {
         updateWirelessDebugButton();
@@ -1653,11 +1696,8 @@ QString Dialog::deviceDisplayName(const QString &serial) const
 
 void Dialog::updateDeviceDisplay(const QString &serial)
 {
-    const int row = ui->serialBox->findText(serial);
     const QString name = deviceDisplayName(serial);
-    if (row >= 0 && row < ui->connectedPhoneList->count()) {
-        ui->connectedPhoneList->item(row)->setText(name + QStringLiteral(" - ") + serial);
-    }
+    ui->connectedPhoneList->setDeviceName(serial, name);
     auto device = qsc::IDeviceManage::getInstance().getDevice(serial);
     if (device && device->getUserData()) {
         auto *form = static_cast<VideoForm *>(device->getUserData());

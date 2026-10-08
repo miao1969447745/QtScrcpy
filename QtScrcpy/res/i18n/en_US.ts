@@ -725,4 +725,51 @@
         <translation>Open encoder advanced settings: optimization levels for visual quality and performance.</translation>
     </message>
 </context>
+<context>
+    <name>DeviceServiceList</name>
+    <message>
+        <source>Device name</source>
+        <translation>Device name</translation>
+    </message>
+    <message>
+        <source>Service status</source>
+        <translation>Service status</translation>
+    </message>
+    <message>
+        <source>Actions</source>
+        <translation>Actions</translation>
+    </message>
+    <message>
+        <source>Start service</source>
+        <translation>Start service</translation>
+    </message>
+    <message>
+        <source>Stop service</source>
+        <translation>Stop service</translation>
+    </message>
+    <message>
+        <source>Stopped</source>
+        <translation>Stopped</translation>
+    </message>
+    <message>
+        <source>Offline</source>
+        <translation>Offline</translation>
+    </message>
+    <message>
+        <source>Starting...</source>
+        <translation>Starting...</translation>
+    </message>
+    <message>
+        <source>Running</source>
+        <translation>Running</translation>
+    </message>
+    <message>
+        <source>Stopping...</source>
+        <translation>Stopping...</translation>
+    </message>
+    <message>
+        <source>Start failed</source>
+        <translation>Start failed</translation>
+    </message>
+</context>
 </TS>

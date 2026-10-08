@@ -6,7 +6,6 @@
 #include <QMessageBox>
 #include <QMenu>
 #include <QSystemTrayIcon>
-#include <QListWidget>
 #include <QTimer>
 #include <QHash>
 
@@ -49,8 +48,6 @@ private slots:
     void onDeviceDisconnected(QString serial);
 
     void on_updateDevice_clicked();
-    void on_startServerBtn_clicked();
-    void on_stopServerBtn_clicked();
     void on_wirelessConnectBtn_clicked();
     void on_startAdbdBtn_clicked();
     void on_getIPBtn_clicked();
@@ -66,7 +63,6 @@ private slots:
     void on_recordScreenCheck_clicked(bool checked);
     void on_usbConnectBtn_clicked();
     void on_wifiConnectBtn_clicked();
-    void on_connectedPhoneList_itemDoubleClicked(QListWidgetItem *item);
     void on_updateNameBtn_clicked();
     void on_useSingleModeCheck_clicked();
     void on_serialBox_currentTextChanged(const QString &arg1);
@@ -117,6 +113,9 @@ private:
     void updateDeviceDisplay(const QString &serial);
     void queryRealDeviceName(const QString &serial);
     void updateWirelessDebugButton();
+    void startDeviceService(const QString &serial);
+    void startSelectedDeviceService();
+    void stopDeviceService(const QString &serial);
 
 protected:
     void closeEvent(QCloseEvent *event);
@@ -160,6 +159,7 @@ private:
     PluginBridge *m_pluginBridge = nullptr;
     QHash<QString, QString> m_deviceNames;
     WirelessDebugging *m_wirelessDebugging = nullptr;
+    QHash<QString, QPointer<qsc::AdbProcess>> m_serviceChecks;
 };
 
 #endif // DIALOG_H

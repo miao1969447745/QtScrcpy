@@ -198,3 +198,26 @@ index afb8189..8ebfc78 100644
      void clipboardPaste() override;
      void pushFileRequest(const QString &file, const QString &devicePath = "") override;
      void installApkRequest(const QString &apkFile) override;
+diff --git a/src/devicemanage/devicemanage.cpp b/src/devicemanage/devicemanage.cpp
+index f42773c..d1dc876 100644
+--- a/src/devicemanage/devicemanage.cpp
++++ b/src/devicemanage/devicemanage.cpp
+@@ -78,6 +78,10 @@ bool DeviceManage::disconnectDevice(const QString &serial)
+             delete it->data();
+             ret = true;
+         }
++        // A cancelled startup has not emitted deviceConnected yet, so its
++        // destructor need not emit deviceDisconnected. Remove the null entry
++        // explicitly to allow this serial to be started again.
++        m_devices.remove(serial);
+     }
+     return ret;
+ }
+@@ -91,6 +95,7 @@ void DeviceManage::disconnectAllDevice()
+             delete i.value();
+         }
+     }
++    m_devices.clear();
+ }
+ 
+ void DeviceManage::onDeviceConnected(bool success, const QString &serial, const QString &deviceName, const QSize &size)

@@ -725,4 +725,51 @@
         <translation>エンコーダー設定...</translation>
     </message>
 </context>
+<context>
+    <name>DeviceServiceList</name>
+    <message>
+        <source>Device name</source>
+        <translation>デバイス名</translation>
+    </message>
+    <message>
+        <source>Service status</source>
+        <translation>サービス状態</translation>
+    </message>
+    <message>
+        <source>Actions</source>
+        <translation>操作</translation>
+    </message>
+    <message>
+        <source>Start service</source>
+        <translation>サービス開始</translation>
+    </message>
+    <message>
+        <source>Stop service</source>
+        <translation>サービス停止</translation>
+    </message>
+    <message>
+        <source>Stopped</source>
+        <translation>停止中</translation>
+    </message>
+    <message>
+        <source>Offline</source>
+        <translation>オフライン</translation>
+    </message>
+    <message>
+        <source>Starting...</source>
+        <translation>起動中…</translation>
+    </message>
+    <message>
+        <source>Running</source>
+        <translation>起動済み</translation>
+    </message>
+    <message>
+        <source>Stopping...</source>
+        <translation>停止処理中…</translation>
+    </message>
+    <message>
+        <source>Start failed</source>
+        <translation>起動失敗</translation>
+    </message>
+</context>
 </TS>
